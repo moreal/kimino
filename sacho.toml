@@ -1,0 +1,8 @@
+[changelog]
+path = "CHANGES.md"
+title = "Changelog"
+materialize = true
+
+[fragments]
+directory = "changes.d"
+next-file = "next"

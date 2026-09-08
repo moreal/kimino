@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.output/
+.vinxi/
+.local/
+test-results/
+playwright-report/
+package-lock.json
+CHANGES.md
+changes.d/

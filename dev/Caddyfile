@@ -1,0 +1,9 @@
+{
+    auto_https disable_redirects
+}
+
+https://localhost:8443 {
+    tls internal
+    header Access-Control-Expose-Headers "Location"
+    reverse_proxy oni:4000
+}

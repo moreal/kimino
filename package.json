@@ -1,0 +1,45 @@
+{
+  "name": "kimino",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "check": "npm run format:check && npm run typecheck && npm test && npm run build && npm run changelog:check",
+    "changelog:check": "sacho check",
+    "changelog:build": "sacho sync",
+    "c2s:up": "docker compose up -d",
+    "c2s:seed": "python3 scripts/c2s-seed.py",
+    "c2s:smoke": "python3 scripts/c2s-smoke.py",
+    "c2s:down": "docker compose down",
+    "test:e2e:ui": "playwright test tests/ui.spec.ts",
+    "format": "prettier --write src tests *.ts *.json index.html",
+    "format:check": "prettier --check src tests *.ts *.json index.html"
+  },
+  "dependencies": {
+    "@logtape/logtape": "^2.1.0",
+    "@solidjs/web": "2.0.0-rc.6",
+    "dompurify": "^3.3.0",
+    "solid-js": "2.0.0-rc.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@sacho/sacho": "^0.1.0",
+    "@solidjs/vite-plugin": "3.0.0-next.39",
+    "@types/node": "^24.0.0",
+    "prettier": "3.8.3",
+    "typescript": "^5.9.0",
+    "vite": "^8.0.0",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "npm@11.19.0"
+}

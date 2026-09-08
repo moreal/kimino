@@ -1,0 +1,27 @@
+name: kimino-c2s
+
+services:
+  oni:
+    # Upstream ONI master-58be49b, pinned to the verified image.
+    image: quay.io/go-ap/oni@sha256:a765501d3ee2d0ea557e2585f930cc32e7eca69ea9455a35b70c98549c0d70a5
+    platform: linux/amd64
+    entrypoint: ["/bin/oni", "--path", "/storage"]
+    command: ["run", "--listen", "0.0.0.0:4000", "--url", "https://localhost:8443/", "--pw", "kimino-local-only"]
+    environment:
+      HTTPS: "false"
+    volumes:
+      - oni-data:/storage
+
+  gateway:
+    image: caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./dev/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - oni
+
+volumes:
+  oni-data:
+  caddy-data:
