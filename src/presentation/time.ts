@@ -1,7 +1,7 @@
 const MINUTE = 60_000,
   HOUR = 60 * MINUTE,
   DAY = 24 * HOUR;
-export const UNKNOWN_TIME = '시간 정보 없음';
+const UNKNOWN_TIME = '시간 정보 없음';
 
 function parse(value?: string): Date | undefined {
   if (!value) return;

@@ -1,8 +1,10 @@
-/* ---------------------------------------------------------------------------
-   Kimino design tokens
-   Colors are defined once for light and once for dark; components only use
-   tokens. Spacing is a 4px scale, type is a 7-step scale plus one display size.
---------------------------------------------------------------------------- */
+/* ===========================================================================
+   Tokens
+   Colors are defined once for light and once for dark; components only use tokens.
+   Spacing is a six-step 4px scale; type is a seven-step scale where each size owns one
+   line-height; weights are 400/500/600; radii are sm/md/pill. `:root` is declared once;
+   the media blocks further down only re-tune --tap, --space-page and --avatar.
+=========================================================================== */
 :root {
   color-scheme: light dark;
   /* Color */
@@ -26,6 +28,10 @@
   --success: #3d6b32;
   --success-soft: #eaf2e1;
   --success-line: #c9dbb8;
+  /* Warm caution tint: content warnings only, so they read apart from neutral surfaces. */
+  --warn: #7a5a1c;
+  --warn-soft: #f8f0dc;
+  --warn-line: #e4d09f;
   --shimmer: rgba(255, 255, 255, 0.55);
   /* Avatar palette: background / foreground pairs keyed by data-hue 0..5 */
   --hue-0-bg: #dfe8d3;
@@ -40,40 +46,64 @@
   --hue-4-fg: #5e4a12;
   --hue-5-bg: #f0d9dc;
   --hue-5-fg: #6e2f3b;
-  /* Spacing (4px scale) */
-  --s1: 4px;
-  --s2: 8px;
-  --s3: 12px;
-  --s4: 16px;
-  --s5: 20px;
-  --s6: 24px;
-  --s8: 32px;
-  --s10: 40px;
-  --s12: 48px;
-  --space-page: var(--s6);
-  /* Type */
-  --t-1: 13px;
-  --t0: 14px;
-  --t1: 15px;
-  --t2: 16px;
-  --t3: 18px;
-  --t4: 22px;
-  --t5: 28px;
-  --t-display: clamp(32px, 4vw, 42px);
-  --leading-body: 1.6;
-  --leading-tight: 1.3;
+  /* Spacing: the whole scale, six steps of 4px */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --space-page: var(--s-5);
+  /* Type: every step carries exactly one line-height, so a size always reads the same */
+  --t-xs: 12px;
+  --lh-xs: 1.4;
+  --t-sm: 13px;
+  --lh-sm: 1.45;
+  --t-body: 14px;
+  --lh-body: 1.5;
+  --t-base: 15px;
+  --lh-base: 1.55;
+  --t-md: 16px;
+  --lh-md: 1.5;
+  --t-lg: 18px;
+  --lh-lg: 1.35;
+  --t-xl: 28px;
+  --lh-xl: 1.2;
+  /* Weights: 400 body, 500 quiet emphasis, 600 headings and controls. Nothing else. */
   --font: 'Avenir Next', 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
   /* Shape */
   --r-sm: 6px;
   --r-md: 10px;
-  --r-lg: 14px;
   --r-pill: 999px;
+  /* Icons: one size per context, stroke compensated so the weight reads the same */
+  --icon: 20px;
+  --icon-sm: 16px;
   --shadow-sm: 0 1px 2px rgba(31, 42, 35, 0.06);
   --shadow-md: 0 6px 20px rgba(31, 42, 35, 0.1);
   --ring: 2px solid var(--accent);
   --ring-offset: 2px;
   --avatar: 40px;
   --tap: 44px;
+  /* Modal scrim: one value in both themes. */
+  --scrim: rgba(31, 42, 35, 0.35);
+  /* Stacking, lowest to highest: the skip link when focused, the phone tab bar, the phone
+     toast (under the 맨 위로 control, which steps over it), floating controls, the toast
+     pill elsewhere (over those controls), dialogs. */
+  --z-skip: 2;
+  --z-tab-bar: 4;
+  --z-toast-phone: 5;
+  --z-float: 6;
+  --z-toast: 7;
+  --z-dialog: 8;
+  /* Base type: the whole document reads at the md step. */
+  font-family: var(--font);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  color: var(--ink);
+  background: var(--ground);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -97,6 +127,9 @@
     --success: #b6d6a8;
     --success-soft: #24321f;
     --success-line: #3c5334;
+    --warn: #e6c98a;
+    --warn-soft: #33291a;
+    --warn-line: #5a4a2a;
     --shimmer: rgba(255, 255, 255, 0.07);
     --hue-0-bg: #2a3a2b;
     --hue-0-fg: #c5dcb9;
@@ -115,19 +148,11 @@
   }
 }
 
-/* ---------------------------------------------------------------------------
+/* ===========================================================================
    Base
---------------------------------------------------------------------------- */
-:root {
-  font-family: var(--font);
-  font-size: var(--t2);
-  line-height: var(--leading-body);
-  color: var(--ink);
-  background: var(--ground);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-}
+   Resets, focus, the icon set, the button kinds, avatars, accessibility helpers.
+=========================================================================== */
+/* Base */
 * {
   box-sizing: border-box;
 }
@@ -173,157 +198,59 @@ textarea:focus-visible,
   outline: none;
 }
 
-/* ---------------------------------------------------------------------------
-   Layout
---------------------------------------------------------------------------- */
-.app-shell {
-  display: grid;
-  grid-template-columns: 216px minmax(0, 640px) 256px;
-  gap: var(--s6);
-  max-width: 1200px;
-  margin: auto;
-  padding: 0 var(--s6);
-  min-height: 100vh;
+/* Shared inline icon set, two rendering sizes only: 20px in action rows and navigation,
+   16px in meta lines and badges. The stroke is compensated so both read at the same weight. */
+.icon {
+  width: var(--icon);
+  height: var(--icon);
+  stroke-width: 1.75;
+  flex-shrink: 0;
 }
-.main-column {
-  background: var(--surface);
-  min-width: 0;
-  min-height: 100vh;
-  border-inline: 1px solid var(--line);
+.icon--sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke-width: 2;
 }
-
-/* Sidebar */
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  padding: var(--s8) 0 var(--s6);
+.icon--trail {
+  margin-left: var(--s-1);
+  vertical-align: -2px;
 }
-.brand {
-  display: flex;
-  align-items: center;
-  width: fit-content;
-  font-size: var(--t5);
-  font-weight: 750;
-  letter-spacing: -1.2px;
-  line-height: 1;
+.icon--spin {
+  animation: spin 900ms linear infinite;
 }
-.brand-mark {
-  background: var(--accent);
-  color: var(--accent-ink);
-  width: 36px;
-  height: 38px;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+kbd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px 12px 12px 3px;
-  font-family: Georgia, serif;
-  font-size: var(--t5);
-  letter-spacing: -4px;
-  padding-right: var(--s1);
-  margin-right: var(--s2);
-}
-.brand-mark span {
-  color: var(--accent-soft);
-  font-size: var(--t2);
-  align-self: flex-start;
-}
-.brand-period {
-  color: var(--accent);
-}
-.brand-caption {
-  color: var(--ink-muted);
-  font-size: var(--t-1);
-  margin: var(--s2) 0 0 var(--s12);
-}
-.main-nav {
-  display: grid;
-  gap: var(--s1);
-  margin-top: var(--s10);
-}
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  text-align: left;
-  min-height: var(--tap);
-  padding: var(--s2) var(--s3);
-  border-radius: var(--r-md);
-  font-size: var(--t1);
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--s-1);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: var(--font);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--ink-2);
 }
-.nav-item > .nav-icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-  color: var(--ink-muted);
-}
-.nav-item.active {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.nav-item.active > .nav-icon {
-  color: var(--accent);
-}
-.sidebar-compose {
-  margin-top: var(--s4);
-}
-.text-button.sidebar-disconnect {
-  display: none;
-  margin-top: var(--s3);
-  color: var(--ink-muted);
-}
-.sidebar-bottom {
-  margin-top: auto;
-  display: flex;
+.icon-button {
+  display: inline-flex;
   align-items: center;
-  gap: var(--s2);
-  font-size: var(--t-1);
-  color: var(--ink-muted);
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
 }
-.connection-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-}
-
-/* Page header: kept compact so the first post starts high. */
-.page-header {
-  padding: var(--s4) var(--space-page);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s4);
-  border-bottom: 1px solid var(--line);
-}
-.eyebrow,
-.section-kicker {
-  color: var(--ink-muted);
-  font-size: var(--t-1);
-  font-weight: 650;
-  letter-spacing: 0.6px;
-}
-.page-header .eyebrow {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.8px;
-  opacity: 0.8;
-}
-.page-header h1 {
-  font-size: var(--t4);
-  letter-spacing: -0.5px;
-  margin: var(--s1) 0 0;
-  line-height: var(--leading-tight);
-}
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
+.icon-button:disabled {
+  opacity: 0.55;
 }
 
 /* Buttons */
@@ -331,28 +258,29 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s3);
+  gap: var(--s-3);
   min-height: var(--tap);
-  padding: var(--s2) var(--s5);
+  padding: var(--s-2) var(--s-5);
   color: var(--accent-ink);
   background: var(--accent);
   border: 1px solid var(--accent);
   border-radius: var(--r-md);
-  font-size: var(--t0);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
   font-weight: 600;
   transition: background-color 120ms ease;
 }
 .primary-button:disabled {
   opacity: 0.55;
 }
-.refresh-button,
 .secondary-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: var(--tap);
-  padding: var(--s2) var(--s3);
-  font-size: var(--t-1);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
   color: var(--ink-2);
   border: 1px solid var(--line-strong);
@@ -360,19 +288,40 @@ textarea:focus-visible,
   background: var(--surface);
   white-space: nowrap;
 }
-.refresh-button:disabled,
 .secondary-button:disabled {
   opacity: 0.55;
+}
+/* The one destructive control in the app. It carries the danger colour and its own word;
+   it is only ever reached through a confirmation, never from a card or a key. */
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+  white-space: nowrap;
+}
+.danger-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .text-button {
   min-height: var(--tap);
   min-width: var(--tap);
-  padding: var(--s2) var(--s3);
+  padding: var(--s-2) var(--s-3);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s1);
-  font-size: var(--t0);
+  gap: var(--s-1);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
   font-weight: 500;
   color: var(--ink-muted);
   border-radius: var(--r-pill);
@@ -380,135 +329,20 @@ textarea:focus-visible,
     background-color 120ms ease,
     color 120ms ease;
 }
-.text-button svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
 .text-button:disabled {
   opacity: 0.5;
 }
 .back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
   min-height: var(--tap);
-  padding: var(--s2) var(--space-page);
-  font-size: var(--t0);
+  padding: var(--s-2) var(--space-page);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
   font-weight: 600;
   color: var(--accent);
   border-radius: 0;
-}
-
-/* Demo pill: one thin line (≤36px) with a text-link CTA instead of a banner. */
-.demo-pill {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  min-height: 32px;
-  max-height: 36px;
-  margin: var(--s2) var(--space-page) 0;
-  padding: 0 var(--s3);
-  border: 1px solid var(--accent-line);
-  border-radius: var(--r-pill);
-  background: var(--accent-soft);
-  color: var(--ink-2);
-  font-size: 13px;
-  line-height: 1.3;
-}
-.demo-pill > span {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.demo-pill-action {
-  min-height: 0;
-  min-width: 0;
-  padding: var(--s1) 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  border-radius: var(--r-sm);
-  white-space: nowrap;
-}
-
-/* Context column */
-.context-column {
-  padding-top: 88px;
-}
-.context-card {
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  padding: var(--s5);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
-.context-card h2 {
-  font-size: var(--t3);
-  line-height: var(--leading-tight);
-  margin: var(--s3) 0 var(--s1);
-}
-.profile-address {
-  color: var(--ink-muted);
-  font-size: var(--t-1);
-  overflow-wrap: anywhere;
-  margin: 0 0 var(--s3);
-}
-.profile-avatar {
-  margin-top: var(--s4);
-  width: 48px;
-  height: 48px;
-  font-size: var(--t3);
-}
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  font-size: var(--t-1);
-  color: var(--ink-2);
-}
-.profile-meta {
-  margin: var(--s2) 0 0;
-  font-size: var(--t-1);
-  color: var(--ink-muted);
-}
-.disconnect-button {
-  display: flex;
-  align-items: center;
-  border-top: 1px solid var(--line);
-  margin-top: var(--s4);
-  min-height: var(--tap);
-  padding: var(--s3) 0 0;
-  text-align: left;
-  width: 100%;
-  font-size: var(--t-1);
-  color: var(--ink-muted);
-  border-radius: 0;
-}
-.reading-note {
-  margin: var(--s6) var(--s1);
-}
-.reading-note h2 {
-  font-size: var(--t2);
-  margin: var(--s2) 0;
-}
-.reading-note p {
-  font-size: var(--t-1);
-  line-height: 1.7;
-  color: var(--ink-muted);
-}
-.reading-note strong {
-  color: var(--ink-2);
-}
-.site-footer {
-  border-top: 1px solid var(--line);
-  padding-top: var(--s4);
-  margin: var(--s6) var(--s1);
-  font-size: var(--t-1);
-  color: var(--ink-muted);
-  letter-spacing: 0.6px;
 }
 
 /* Avatars */
@@ -522,8 +356,9 @@ textarea:focus-visible,
   align-items: center;
   background: var(--hue-0-bg);
   color: var(--hue-0-fg);
-  font-size: var(--t1);
-  font-weight: 700;
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  font-weight: 600;
 }
 .avatar[data-hue='1'] {
   background: var(--hue-1-bg);
@@ -550,71 +385,696 @@ textarea:focus-visible,
   color: var(--accent-ink);
 }
 
-/* ---------------------------------------------------------------------------
-   Connection panel (landing)
---------------------------------------------------------------------------- */
-.connection-panel {
-  padding: var(--s12) var(--s10) var(--s10);
+/* Accessibility helpers */
+.sr-only,
+.skip-link:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-.connection-panel h1 {
-  font-size: var(--t-display);
-  font-weight: 650;
-  line-height: 1.35;
-  letter-spacing: -1.5px;
-  margin: var(--s3) 0 var(--s4);
+.skip-link:focus {
+  position: fixed;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: var(--z-skip);
+  padding: var(--s-3);
+  background: var(--surface);
+  color: var(--ink);
+  border: 2px solid var(--accent);
+  border-radius: var(--r-sm);
 }
-.welcome-description {
-  color: var(--ink-2);
-  font-size: var(--t1);
-  line-height: 1.8;
-  margin: 0 0 var(--s6);
+
+/* ===========================================================================
+   Layout
+   The shell and its columns, the sidebar, the page header, the right column, the
+   connect screen, the header search, the dialogs.
+=========================================================================== */
+/* Layout */
+.app-shell {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 620px) minmax(280px, 360px);
+  gap: var(--s-5);
+  max-width: 1280px;
+  margin: auto;
+  padding: 0 var(--s-5);
+  min-height: 100vh;
 }
-.explore-button {
-  width: 100%;
-  justify-content: space-between;
-  font-size: var(--t1);
+/* Every column that can hold note cards is a query container, so the timeline and the
+   thread column decide on the visibility grid by their own width, not by the viewport.
+   Each card is a container of its own (`card`, below) so its action row folds by the width
+   the card actually has - a nested reply is narrower than its column by its indent. */
+.main-column,
+.context-column {
+  container-type: inline-size;
+  container-name: column;
 }
-.field-help {
-  font-size: var(--t-1);
-  line-height: 1.6;
-  color: var(--ink-muted);
-  margin: var(--s2) 0 0;
+.main-column {
+  background: var(--surface);
+  min-width: 0;
+  min-height: 100vh;
+  border-inline: 1px solid var(--line);
 }
-.connection-divider {
+/* Landing: a single centred column at every width - the brand row, the form (560px at
+   most, so no line breaks mid-word and no placeholder is cut off), then the compatibility
+   note directly under it. The class is doubled so the wide-layout column rule cannot
+   reclaim it. */
+.app-shell.app-shell--landing {
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
+  align-content: start;
+  max-width: 100%;
+}
+.app-shell--landing .sidebar {
+  grid-column: 1 / -1;
+  position: static;
+  height: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-5) 0 0;
+}
+.app-shell--landing .brand-caption {
+  margin: 0;
+}
+.app-shell--landing .sidebar-bottom {
+  margin: 0 0 0 auto;
+}
+.app-shell--landing .main-column {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.app-shell--landing .landing-aside {
+  display: block;
+  position: static;
+  max-height: none;
+  overflow: visible;
+  padding: var(--s-4) 0 var(--s-6);
+}
+
+/* Sidebar */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-6) 0 var(--s-5);
+}
+.brand {
   display: flex;
   align-items: center;
-  gap: var(--s4);
-  margin: var(--s8) 0 var(--s4);
-  color: var(--ink-muted);
-  font-size: var(--t-1);
+  width: fit-content;
+  font-size: var(--t-xl);
+  font-weight: 600;
+  letter-spacing: -1.2px;
+  line-height: var(--lh-xl);
 }
-.connection-divider::before,
-.connection-divider::after {
+.brand-mark {
+  background: var(--accent);
+  color: var(--accent-ink);
+  width: 36px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md) var(--r-md) var(--r-md) var(--r-sm);
+  font-family: Georgia, serif;
+  font-size: var(--t-xl);
+  line-height: var(--lh-xl);
+  letter-spacing: -4px;
+  padding-right: var(--s-1);
+  margin-right: var(--s-2);
+}
+/* The dot beside the mark is drawn, not typed: no glyph stands in for a shape. */
+.brand-mark::after {
   content: '';
+  align-self: flex-start;
+  width: var(--s-1);
+  height: var(--s-1);
+  margin-top: var(--s-2);
+  border-radius: 50%;
+  background: var(--accent-soft);
+}
+.brand-period {
+  color: var(--accent);
+}
+.brand-caption {
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  margin: var(--s-2) 0 0 calc(var(--s-6) + var(--s-4));
+}
+.main-nav {
+  display: grid;
+  gap: var(--s-1);
+  margin-top: calc(var(--s-6) + var(--s-2));
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  text-align: left;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  font-weight: 600;
+  color: var(--accent);
+}
+.nav-item > .nav-icon {
+  color: var(--ink-muted);
+}
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.nav-item.active > .nav-icon {
+  color: var(--accent);
+}
+.sidebar-compose {
+  margin-top: var(--s-4);
+}
+/* The header's account control: only where the right column (and its account line) is not. */
+.icon-button.account-button {
+  display: none;
+  color: var(--ink-2);
+}
+.nav-item.sidebar-disconnect {
+  display: none;
+  margin-top: var(--s-3);
+  color: var(--ink-muted);
+}
+.sidebar-shortcuts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-radius: var(--r-md);
+}
+/* Two browser settings under the navigation, drawn as switches: a track with a knob that
+   moves to the far end when on. Nothing here is filled like the current list above, so an
+   "on" setting is never mistaken for a place in the app. The whole row is the target. */
+.sidebar-switch {
+  display: none;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-radius: var(--r-md);
+  text-align: left;
+}
+.sidebar-switch:hover {
+  color: var(--ink);
+}
+.switch-label {
+  flex: 1 1 auto;
+}
+.switch-track {
+  flex: 0 0 auto;
+  position: relative;
+  width: var(--s-6);
+  height: var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  transition: background 120ms ease-out;
+}
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: var(--s-3);
+  height: var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 120ms ease-out;
+}
+.sidebar-switch[aria-checked='true'] {
+  color: var(--ink);
+}
+.sidebar-switch[aria-checked='true'] .switch-track {
+  background: var(--accent);
+}
+.sidebar-switch[aria-checked='true'] .switch-knob {
+  transform: translateX(var(--s-4));
+}
+.sidebar-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.connection-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+/* Beside 연결 중…: nothing has connected yet, so nothing is lit. */
+.connection-dot--pending {
+  background: var(--ink-muted);
+}
+
+/* Page header: one 52px row (view name, inline search, refresh) so the first post starts high. */
+.page-header {
+  min-height: 52px;
+  padding: var(--s-1) var(--space-page) var(--s-1) var(--space-page);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow {
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  letter-spacing: 0.6px;
+}
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.header-wordmark {
+  display: none;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  color: var(--accent);
+}
+.header-wordmark::after {
+  content: '·';
+  margin-left: var(--s-2);
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.page-header h1 {
+  font-size: var(--t-lg);
+  letter-spacing: -0.3px;
+  margin: 0;
+  line-height: var(--lh-lg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-1);
   flex: 1;
-  height: 1px;
-  background: var(--line);
+  min-width: 0;
+}
+/* Demo pill: one thin line (≤36px) with a text-link CTA whose tap target still reaches 44px. */
+.demo-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 32px;
+  max-height: 36px;
+  overflow: visible;
+  margin: var(--s-2) var(--space-page) 0;
+  padding: 0 var(--s-2) 0 var(--s-3);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.demo-pill > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.demo-pill-action {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  /* The 44px target overhangs the 32px line by 6px on each side instead of thickening it. */
+  margin: calc((var(--tap) - var(--s-6)) / -2) 0;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+/* Author filter chip: a status line above the list, with its own clear control. */
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) var(--space-page) 0;
+  padding: 0 var(--s-1) 0 var(--s-3);
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.filter-chip > .icon {
+  color: var(--ink-muted);
+}
+.filter-chip > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.filter-chip-clear {
+  width: 32px;
+  height: 32px;
+}
+
+/* Context column: sticks beside the timeline and scrolls on its own when a thread is long. */
+.context-column {
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--s-5);
+  padding-bottom: var(--s-5);
+  --space-page: var(--s-4);
+  --avatar: 32px;
+}
+/* One line: who is connected (sync state as a tooltip) and the single exit control. */
+.context-account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-1) 0 var(--s-3);
+  margin-bottom: var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.context-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.context-handle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+/* The address under the name, quieter: what tells this account from a namesake. */
+.context-address {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-muted);
+}
+.context-disconnect {
+  width: var(--tap);
+  height: var(--tap);
+  color: var(--ink-muted);
+}
+.context-account + .thread-panel {
+  margin-top: 0;
+}
+/* Replies addressed to me, one line each, while no conversation is open; no card around
+   them, and when there are none, one muted line and nothing else. */
+.replies-peek {
+  padding: 0 var(--s-3);
+}
+.replies-peek-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-body) !important;
+  line-height: var(--lh-body) !important;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin: 0 0 var(--s-2) !important;
+}
+.replies-peek-heading .icon {
+  color: var(--ink-muted);
+}
+.replies-peek-empty {
+  margin: 0;
+  border: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.peek-item {
+  display: grid;
+  gap: var(--s-1);
+  width: 100%;
+  text-align: left;
+  padding: var(--s-2) var(--s-2);
+  margin: 0 calc(var(--s-2) * -1);
+  width: calc(100% + var(--s-4));
+  border-radius: var(--r-md);
+  border-top: 1px solid var(--line);
+  min-height: var(--tap);
+}
+.peek-item:first-of-type {
+  border-top: 0;
+}
+.peek-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-muted);
+}
+.peek-meta strong {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.peek-text {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* The conversation in the right column: framed like a card, cards inside stay compact. */
+.thread-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.thread-panel .note-card--focused .note-content {
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+}
+.thread-panel .conversation-heading {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.thread-panel .conversation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-right: var(--space-page);
+}
+.conversation-heading:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-4);
+  margin: var(--s-5) var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  letter-spacing: 0.6px;
+}
+
+/* Focus on the panel's heading, after a thread opens: a heading, not a button. An underline
+   in the accent says where focus went without dressing the word as a control. */
+.thread-panel .conversation-heading:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: var(--s-1);
+}
+/* Connection panel (landing) */
+.connection-panel {
+  padding: var(--s-6) var(--s-6) var(--s-6);
+}
+.connection-panel h1 {
+  word-break: keep-all;
+  font-size: var(--t-xl);
+  font-weight: 600;
+  line-height: var(--lh-xl);
+  letter-spacing: -0.8px;
+  margin: 0 0 var(--s-2);
+}
+.welcome-description {
+  color: var(--ink-muted);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  margin: 0 0 var(--s-5);
+}
+.connection-heading {
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  font-weight: 600;
+  margin: 0;
+}
+.connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+.connection-actions .primary-button {
+  flex: 1 1 160px;
+}
+.explore-button {
+  flex: 1 1 160px;
+  gap: var(--s-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.field-help {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  margin: var(--s-2) 0 0;
+}
+/* Directly under the Actor URL field: the one-line version of the compatibility note. */
+.field-help--inline {
+  margin: 0;
+  font-weight: 400;
 }
 .compatibility-note {
-  padding: var(--s3) var(--s4);
+  padding: var(--s-3) var(--s-4);
   border-radius: var(--r-md);
   background: var(--surface-2);
-  font-size: var(--t-1);
-  line-height: 1.6;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
 }
 .compatibility-note p {
-  margin: var(--s1) 0 0;
+  margin: var(--s-1) 0 0;
   color: var(--ink-2);
+}
+.compatibility-note a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+.remember-field {
+  display: grid;
+  gap: var(--s-1);
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 500;
+  cursor: pointer;
+}
+.checkbox-label input {
+  width: var(--icon);
+  height: var(--icon);
+  margin: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.remember-field .field-help {
+  margin: 0;
+}
+/* One tappable row: the box on the left, wrapping text on the right (overrides the form's
+   grid label and full-width input rules that follow). */
+.connection-form .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: var(--s-2) 0;
+  font-size: var(--t-body);
+  font-weight: 500;
+  line-height: var(--lh-body);
+}
+.connection-form .checkbox-label input {
+  width: var(--icon);
+  height: var(--icon);
+  min-height: 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+.connection-form .checkbox-label span {
+  flex: 1;
+  min-width: 0;
 }
 .connection-form {
   display: grid;
-  gap: var(--s4);
-  margin-top: var(--s5);
+  gap: var(--s-3);
+  margin-top: 0;
 }
 .connection-form label {
   display: grid;
-  gap: var(--s2);
-  font-size: var(--t-1);
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
 }
 .connection-form input {
@@ -622,26 +1082,28 @@ textarea:focus-visible,
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
   min-height: var(--tap);
-  padding: var(--s2) var(--s3);
-  font-size: var(--t2);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
   font-weight: 400;
   color: var(--ink);
   background: var(--surface);
 }
 .connection-form input::placeholder {
-  font-size: var(--t0);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
   color: var(--ink-muted);
 }
 .setup-help {
-  margin-top: var(--s6);
-  font-size: var(--t-1);
-  line-height: 1.7;
+  margin-top: var(--s-5);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-2);
 }
 .setup-help summary {
   cursor: pointer;
   min-height: var(--tap);
-  padding: var(--s3) 0;
+  padding: var(--s-3) 0;
   font-weight: 600;
 }
 .setup-help summary:focus-visible {
@@ -649,51 +1111,212 @@ textarea:focus-visible,
   outline-offset: var(--ring-offset);
 }
 .setup-help ol {
-  padding-left: var(--s5);
+  padding-left: var(--s-5);
 }
 .setup-help li {
-  margin: var(--s2) 0;
+  margin: var(--s-2) 0;
 }
 .setup-help code {
-  font-size: var(--t-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   overflow-wrap: anywhere;
 }
 .setup-help a {
   text-decoration: underline;
 }
-.welcome-aside {
-  padding: var(--s3) var(--s1);
-}
-.welcome-aside h2 {
-  font-size: var(--t5);
-  line-height: 1.45;
-  letter-spacing: -1px;
-  font-weight: 500;
-  margin: var(--s3) 0;
-}
-.welcome-aside p {
-  font-size: var(--t-1);
-  line-height: 1.8;
+
+/* Search (inline in the header; collapses to its icon on small screens) */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  padding: 0 var(--s-3);
+  flex: 0 1 240px;
+  min-width: 0;
+  min-height: 40px;
   color: var(--ink-muted);
 }
-.large-flower {
-  display: block;
-  font-size: 120px;
-  line-height: 1;
-  color: var(--accent-line);
-  margin: var(--s10) 0 0 var(--s6);
+.search-field:focus-within {
+  border-color: var(--accent);
+}
+.search-field input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  min-height: 38px;
+  padding: var(--s-2) 0;
+  width: 100%;
+  min-width: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+}
+/* The icon and its hidden label: a tap on the icon puts the caret in the field. */
+.search-label {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  color: inherit;
+  cursor: text;
+}
+/* One clear control, drawn by the app whenever the field has a query (the browser's own
+   only shows on hover), at the end of the pill and at the page's target size. */
+.search-clear {
+  flex: 0 0 auto;
+  margin-right: calc(var(--s-2) * -1);
+}
+.search-field input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-field input::placeholder {
+  color: var(--ink-muted);
 }
 
-/* ---------------------------------------------------------------------------
+/* Shortcuts dialog */
+.shortcuts-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s-4);
+  background: var(--scrim);
+}
+.shortcuts-dialog {
+  width: min(420px, 100%);
+  max-height: calc(100dvh - var(--s-6));
+  overflow: auto;
+  padding: var(--s-4) var(--s-5) var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.shortcuts-header h2 {
+  margin: 0;
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+}
+.shortcuts-hint {
+  margin: var(--s-1) 0 var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.shortcuts-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+}
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: var(--s-3);
+}
+.shortcut-row dt {
+  display: flex;
+  gap: var(--s-1);
+}
+.shortcut-row dd {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+}
+
+/* Actor sheet: the shortcuts dialog frame with a few facts and two actions. */
+.actor-sheet-title {
+  min-width: 0;
+}
+.actor-sheet-title h2 {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+  overflow-wrap: anywhere;
+}
+.actor-handle {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.actor-facts {
+  display: grid;
+  gap: var(--s-3);
+  margin: var(--s-4) 0 0;
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.actor-facts dt {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.actor-facts dd {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.actor-facts-scope {
+  font-size: var(--t-sm) !important;
+  line-height: var(--lh-sm) !important;
+  color: var(--ink-muted) !important;
+}
+.actor-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+.actor-sheet-actions .secondary-button {
+  gap: var(--s-2);
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.actor-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ===========================================================================
    Composer
---------------------------------------------------------------------------- */
+   The form, its footer and hints, the inline reply and edit frames, the warning input,
+   the visibility picker.
+=========================================================================== */
+/* Composer */
 .composer {
-  padding: var(--s5) var(--space-page) var(--s3);
+  padding: var(--s-5) var(--space-page) var(--s-3);
   border-bottom: 1px solid var(--line);
 }
 .compose-row {
   display: flex;
-  gap: var(--s3);
+  gap: var(--s-3);
 }
 .compose-input {
   min-width: 0;
@@ -702,129 +1325,292 @@ textarea:focus-visible,
 .compose-input textarea {
   width: 100%;
   min-height: 72px;
-  font-size: var(--t2);
-  line-height: var(--leading-body);
+  /* The same step as a note's body, so the prompt does not read louder than the posts. */
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
   resize: vertical;
   border: 0;
   background: transparent;
   color: var(--ink);
-  padding: var(--s2) 0;
+  padding: var(--s-2) 0;
 }
 .compose-input textarea::placeholder {
   color: var(--ink-muted);
 }
+/* The footer wraps as a whole: the audience line drops to its own row before the buttons
+   are squeezed, and the primary button leads the control group, taking the full width of a
+   second row when the row it starts on cannot hold both buttons. */
 .composer-footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: var(--s3);
-  margin-top: var(--s2);
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-2);
 }
 .visibility {
-  font-size: var(--t-1);
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-muted);
 }
 .compose-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s3);
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-left: auto;
+}
+.compose-controls .primary-button {
+  order: 1;
+  flex: 1 1 auto;
+}
+.compose-cancel {
+  order: 2;
+  padding-inline: var(--s-3);
+}
+.compose-controls .character-count {
+  order: 3;
+}
+.primary-button,
+.text-button {
+  white-space: nowrap;
 }
 .character-count {
-  font-size: var(--t-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* Past the ceiling the count stops being a quiet number: it says so and the button is off. */
+.character-count--over {
+  color: var(--danger);
+  font-weight: 600;
+}
 .draft-hint {
-  margin: var(--s2) 0 0;
-  font-size: var(--t-1);
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-muted);
   text-align: right;
+}
+/* The "수정됨" rule waits behind a disclosure at the foot of the edit form: read once, not
+   printed on every edit. */
+.edit-marker-hint {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  text-align: right;
+}
+.edit-marker-hint summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.edit-marker-hint p {
+  margin: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 .reply-heading {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: var(--t0);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
   font-weight: 600;
 }
 .compose-parent {
   border-left: 2px solid var(--accent-line);
-  margin: var(--s1) 0 var(--s3);
-  padding: 0 0 0 var(--s3);
+  margin: var(--s-1) 0 var(--s-3);
+  padding: 0 0 0 var(--s-3);
   max-height: 128px;
   overflow: auto;
-  font-size: var(--t-1);
-  line-height: 1.6;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-muted);
 }
 .compose-parent p {
-  margin: 0 0 var(--s2);
+  margin: 0 0 var(--s-2);
 }
 .inline-reply {
   background: var(--surface-2);
   border-left: 3px solid var(--accent);
 }
+/* Feed composer folds to one line until it is focused or holds a draft. */
+.main-composer .composer {
+  padding-top: var(--s-3);
+}
+/* `composer--collapsed` is set by the component until the writer first focuses the textarea
+   (not by :focus-within): a form that folds on blur or unfolds on an option's mousedown moves
+   the control under the pointer before the click lands. */
+.main-composer .composer--collapsed textarea {
+  min-height: var(--tap);
+  height: var(--tap);
+  resize: none;
+}
+.main-composer .composer--collapsed .composer-footer,
+.main-composer .composer--collapsed .draft-hint,
+.main-composer .composer--collapsed .compose-options,
+.main-composer .composer--collapsed .visibility-limit {
+  display: none;
+}
 .inline-reply .composer {
   padding-left: calc(var(--space-page) - 3px);
 }
 
-/* ---------------------------------------------------------------------------
-   Feed tools
---------------------------------------------------------------------------- */
-.feed-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  padding: var(--s3) var(--space-page);
-}
-.search-field {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  border: 1px solid var(--line);
+/* The edit form reuses the reply composer's frame with its own accent side. */
+.inline-edit {
   background: var(--surface-2);
-  border-radius: var(--r-md);
-  padding: 0 var(--s3);
-  flex: 1;
-  min-width: 0;
-  color: var(--ink-muted);
+  border-left: 3px solid var(--accent-line);
 }
-.search-field:focus-within {
-  border-color: var(--accent);
+.inline-edit .composer {
+  padding-left: calc(var(--space-page) - 3px);
 }
-.search-field > span:first-child {
-  font-size: var(--t3);
-  line-height: 1;
+.compose-scope--fixed {
+  margin: 0;
+  flex: 1 1 12rem;
 }
-.search-field input {
-  border: 0;
-  outline: 0;
-  background: transparent;
-  min-height: 40px;
-  padding: var(--s2) 0;
+/* Composer: warning input, segmented visibility picker, reply limit hint. */
+.compose-warning {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-2);
+}
+.compose-warning-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  width: fit-content;
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-1);
+  border-radius: var(--r-pill);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+}
+.compose-warning input {
   width: 100%;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--warn-line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+}
+.compose-warning input:focus-visible {
+  outline: var(--ring);
+  outline-offset: 1px;
+}
+.compose-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-1);
+}
+.visibility-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-1);
+  width: 100%;
+  margin: 0;
+  padding: var(--s-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
   min-width: 0;
-  font-size: var(--t0);
-  color: var(--ink);
 }
-.search-field input::placeholder {
+.visibility-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  cursor: pointer;
+  word-break: keep-all;
+}
+.visibility-option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.visibility-option--active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.visibility-option:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+  text-decoration: line-through;
+}
+.visibility-option:has(input:focus-visible) {
+  outline: var(--ring);
+  outline-offset: 1px;
+}
+.visibility-picker:disabled .visibility-option {
+  cursor: default;
+}
+.warning-toggle--on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.visibility-limit {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-muted);
 }
-.feed-count {
-  font-size: var(--t-1);
+/* What this composer cannot do yet, said once where the writer would look for it. */
+.compose-scope {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
   color: var(--ink-muted);
-  white-space: nowrap;
 }
 
-/* ---------------------------------------------------------------------------
-   Note cards
---------------------------------------------------------------------------- */
+/* ===========================================================================
+   Cards
+   Note cards, their body (visibility, content warnings, attachments), the action row,
+   the delete confirmation, the conversation view, the foot of the list, the saved list.
+=========================================================================== */
+/* Note cards */
 .note-card {
-  padding: var(--s5) var(--space-page) var(--s2);
+  padding: var(--s-5) var(--space-page) var(--s-2);
   border-bottom: 1px solid var(--line);
   display: flex;
-  gap: var(--s3);
+  gap: var(--s-3);
+  container-type: inline-size;
+  container-name: card;
+}
+.note-card:focus-visible {
+  outline: var(--ring);
+  outline-offset: -3px;
+  border-radius: var(--r-sm);
+}
+.timeline:focus-visible {
+  outline: none;
 }
 .note-body {
   flex: 1;
@@ -834,64 +1620,89 @@ textarea:focus-visible,
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s2);
+  gap: var(--s-1) var(--s-2);
 }
 .author {
-  font-size: var(--t1);
-  font-weight: 700;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
   color: var(--ink);
   overflow-wrap: anywhere;
+  text-align: left;
+}
+/* The address after the name: quiet, on the same line while it fits. */
+.author-handle {
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+/* The name is a button that opens the in-app author sheet; it reads like the link it replaced. */
+button.author {
+  padding: 0;
+  border-radius: var(--r-sm);
+  min-height: 0;
 }
 .timestamp {
-  font-size: var(--t-1);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 400;
   color: var(--ink-muted);
 }
 .note-context {
   color: var(--ink-muted);
-  font-size: var(--t-1);
-  line-height: 1.5;
-  margin: 0 0 var(--s1);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  line-height: var(--lh-xs);
+  margin: 0 0 var(--s-1);
 }
-.reply-context {
-  display: inline-block;
-  margin: var(--s1) 0 0;
+.reply-context,
+.shared-by {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-1) 0 0;
 }
 .reply-context--button {
   font: inherit;
-  font-size: var(--t-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   text-align: left;
   text-decoration: underline;
   text-underline-offset: 3px;
   color: var(--ink-muted);
+  min-height: 28px;
 }
 a.reply-context {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .note-content {
-  font-size: var(--t2);
-  line-height: var(--leading-body);
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
   color: var(--ink);
-  margin: var(--s2) 0 var(--s1);
+  margin: var(--s-2) 0 var(--s-1);
   overflow-wrap: anywhere;
 }
 .note-content p {
-  margin: 0 0 var(--s3);
+  margin: 0 0 var(--s-3);
 }
 .note-content p:last-child {
   margin-bottom: 0;
 }
 .note-content pre {
   white-space: pre-wrap;
-  padding: var(--s3);
+  padding: var(--s-3);
   border-radius: var(--r-sm);
   background: var(--surface-2);
-  font-size: var(--t0);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
 }
 .note-content blockquote {
   border-left: 3px solid var(--accent-line);
-  padding-left: var(--s3);
-  margin: 0 0 var(--s3);
+  padding-left: var(--s-3);
+  margin: 0 0 var(--s-3);
 }
 .note-content a {
   text-decoration: underline;
@@ -905,32 +1716,57 @@ a.reply-context {
 .note-content h4,
 .note-content h5,
 .note-content h6 {
-  font-size: var(--t2);
-  font-weight: 700;
-  margin: 0 0 var(--s2);
-  line-height: var(--leading-body);
+  font-size: var(--t-md);
+  font-weight: 600;
+  margin: 0 0 var(--s-2);
+  line-height: var(--lh-md);
 }
 .note-content svg {
   max-width: 100%;
   height: auto;
 }
 
-/* Action row: four equal targets, readable at rest, filled when pressed. */
+/* Action row: five equal targets that always say what they do. The row never wraps and
+   never hides its words; a column too narrow for all five scrolls sideways instead. */
 .note-actions {
   display: flex;
   align-items: center;
-  gap: var(--s1);
-  flex-wrap: wrap;
-  margin: var(--s1) 0 0 calc(var(--s3) * -1);
+  gap: var(--s-1);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: var(--s-1) 0 0 calc(var(--s-3) * -1);
+}
+.note-actions::-webkit-scrollbar {
+  display: none;
 }
 .note-actions .text-button {
-  padding-inline: var(--s3);
+  padding-inline: var(--s-3);
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
+/* A control's word folds behind its icon where a card step says so: the step sets
+   `--action-word: folded` on the control and the word inside takes the visually-hidden
+   idiom (a style query reads the control's property), so the word stays in the accessible
+   name and the step spells the idiom once. */
+@container style(--action-word: folded) {
+  .action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+/* A reaction in effect is never carried by hue alone: the word changes (좋아요 → 좋아함),
+   the icon fills, and the control takes an outline that reads in greyscale. It keeps the
+   type step and weight of the actions beside it: the state is a mark, not a louder word. */
 .reaction-button[aria-pressed='true'],
 .save-button[aria-pressed='true'] {
-  background: var(--accent-soft);
   color: var(--accent);
-  font-weight: 700;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .note-actions .text-button:disabled {
   opacity: 0.5;
@@ -941,38 +1777,255 @@ a.reply-context {
   opacity: 0.7;
   cursor: progress;
 }
-.note-actions .thread-button .count {
+.note-actions .count {
   color: var(--ink-muted);
   font-weight: 400;
-  font-size: var(--t-1);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
 }
 .draft-badge {
-  margin-left: var(--s1);
-  padding: 1px var(--s2);
+  margin-left: var(--s-1);
+  padding: 0 var(--s-2);
   border-radius: var(--r-pill);
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.5;
+  font-size: var(--t-xs);
+  font-weight: 600;
+  line-height: var(--lh-xs);
   white-space: nowrap;
 }
+/* My own note's 수정 and 삭제 follow the five everyone gets. In a wide column both stand
+   inline and the 관리 disclosure is not drawn; the narrow-column rule at the end of the
+   file folds them behind it (`aria-expanded` on the control, `data-open` on the group) and
+   opens them as a row of their own under the six. The group's own copy of 저장 is drawn only
+   on the narrowest cards, by the rule at the end of the file. */
+.manage-toggle {
+  display: none;
+}
+.manage-group {
+  display: contents;
+}
+.save-button--folded {
+  display: none;
+}
+.manage-toggle[aria-expanded='true'] {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+/* The one destructive control on a card sits at the weight of its neighbours at rest, so
+   the eye does not land on it first; it turns to the danger colour when pointed at, focused,
+   or while its confirmation is open. It still only opens that confirmation. */
+.note-actions .delete-button:hover:not(:disabled),
+.note-actions .delete-button:focus-visible,
+.note-actions .delete-button[aria-expanded='true'] {
+  color: var(--danger);
+}
+
+/* Deleting my own note: what it does, said in the page before anything is sent. Focus lands
+   on 삭제 취소, so the destructive button is never what a stray key press activates. */
+.delete-confirm {
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+}
+.delete-confirm-heading {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--danger);
+}
+.delete-confirm-body {
+  margin: var(--s-1) 0 var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.delete-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.note-edited {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-1) 0 0;
+}
+
 /* Reaction outcome for one note, right where the tap happened. */
 .note-feedback {
-  margin: var(--s1) 0 0;
-  padding: var(--s2) var(--s3);
+  margin: var(--s-1) 0 0;
+  padding: var(--s-2) var(--s-3);
   border: 1px solid var(--danger-line);
   border-radius: var(--r-md);
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: var(--t-1);
-  line-height: 1.5;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   overflow-wrap: anywhere;
 }
 
-/* ---------------------------------------------------------------------------
-   Conversation view
---------------------------------------------------------------------------- */
+/* --- note body: cw/media/visibility --- */
+/* The one badge that must never be a bare glyph: the icon carries the word beside it. */
+/* Whose note this is, in a word. On a one-person server every author shares the host, so
+   the handle cannot tell them apart and colour alone would leave a greyscale reader out. */
+.own-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-1) 0 0;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  vertical-align: middle;
+}
+.visibility-word {
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* Content warning: the one warm, accented bar in a card. */
+.content-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  margin: var(--s-2) 0 var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--warn-line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+}
+.content-warning-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  font-weight: 600;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.content-warning-label svg {
+  flex-shrink: 0;
+  margin-top: var(--s-1);
+  color: var(--warn);
+}
+.content-warning-toggle {
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--accent);
+}
+.content-warning-toggle[aria-expanded='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.attachments {
+  list-style: none;
+  margin: var(--s-2) 0 var(--s-1);
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+/* Attachment rows: a neutral outline, no fill, so they sit below the warning bar. */
+.attachment {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: transparent;
+  padding: var(--s-2) var(--s-3);
+}
+.attachment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-height: var(--tap);
+}
+.attachment-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.attachment-alt {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.attachment-alt--none {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+.attachment-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.attachment-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: var(--s-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+}
+/* What a note's share control will do, said above the row that does it. */
+.share-scope {
+  margin: var(--s-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Conversation view */
 .conversation {
   position: relative;
 }
@@ -981,58 +2034,109 @@ a.reply-context {
 }
 .thread-parent .note-card {
   border-bottom: 0;
-  padding-bottom: var(--s3);
+  padding-bottom: var(--s-3);
 }
 .thread-parent::after {
   content: '';
   position: absolute;
   left: calc(var(--space-page) + var(--avatar) / 2 - 1px);
-  top: calc(var(--s5) + var(--avatar) + var(--s1));
+  top: calc(var(--s-5) + var(--avatar) + var(--s-1));
   bottom: 0;
   width: 2px;
-  border-radius: 1px;
+  border-radius: var(--r-pill);
   background: var(--accent-line);
 }
+/* The note the conversation was opened from: larger type says which one it is. It carries
+   no bar of its own, so the roving focus outline is the only "current" mark in the column
+   and j/k never leave two marks on two cards. */
 .thread-focus .note-card {
-  border-left: 4px solid var(--accent);
-  padding-left: calc(var(--space-page) - 4px);
-  padding-top: var(--s6);
-  padding-bottom: var(--s3);
+  padding-top: var(--s-5);
+  padding-bottom: var(--s-3);
   background: var(--surface);
 }
 .note-card--focused .author {
-  font-size: var(--t2);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
 }
 .note-card--focused .note-content {
-  font-size: var(--t3);
-  line-height: 1.55;
-  margin-top: var(--s3);
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+  margin-top: var(--s-3);
 }
+/* Section header: plain text over a hairline, no box. */
 .conversation-label {
-  font-size: var(--t-1);
-  font-weight: 650;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
   letter-spacing: 0.4px;
   color: var(--ink-muted);
   margin: 0;
-  padding: var(--s3) var(--space-page);
+  padding: var(--s-4) var(--space-page) var(--s-2);
   border-bottom: 1px solid var(--line);
-  background: var(--surface-2);
+  background: none;
 }
-.conversation > .post-with-reply .note-card {
-  padding-left: calc(var(--space-page) + var(--s4));
+/* Ancestors read quieter than the focused note; one connector joins the chain. */
+.thread-ancestors .note-card {
+  padding-top: var(--s-4);
 }
-.conversation > .post-with-reply .avatar {
+.thread-ancestors .note-content {
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  color: var(--ink-2);
+}
+.thread-ancestors .author {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+/* Replies below: one indent step per level, capped (3 on desktop, 2 on phones); deeper
+   replies sit flat under the last level with a drawn "…에게" cue. */
+.thread-reply {
+  --indent: var(--s-5);
+  --indents: min(var(--depth, 0), 3);
+  position: relative;
+  padding-left: calc(var(--indents) * var(--indent));
+}
+.thread-reply .note-card {
+  padding-left: calc(var(--space-page) + var(--s-3));
+}
+.thread-reply .avatar {
   --avatar: 32px;
-  font-size: var(--t-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
 }
-.conversation > .post-with-reply .inline-reply .composer {
-  padding-left: calc(var(--space-page) + var(--s4) - 3px);
+.thread-reply .inline-reply .composer {
+  padding-left: calc(var(--space-page) + var(--s-3) - 3px);
+}
+.thread-reply[data-depth='1']::before,
+.thread-reply[data-depth='2']::before,
+.thread-reply[data-depth='3']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--indents) * var(--indent) + var(--space-page) - var(--s-2));
+  width: 2px;
+  background: var(--line);
+}
+.reply-cue {
+  display: none;
+  margin: 0;
+  padding: var(--s-2) var(--space-page) 0 calc(var(--space-page) + var(--s-3));
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.thread-reply--flat .reply-cue {
+  display: block;
+}
+.thread-reply--flat .note-card {
+  padding-top: var(--s-2);
 }
 .missing-parent,
 .scope-note {
-  font-size: var(--t-1);
-  line-height: 1.6;
-  padding: var(--s3) var(--space-page);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  padding: var(--s-3) var(--space-page);
   color: var(--ink-muted);
   background: var(--surface-2);
   margin: 0;
@@ -1042,102 +2146,364 @@ a.reply-context {
   text-decoration: underline;
   color: var(--accent);
 }
+.thread-note {
+  margin: 0;
+  padding: var(--s-3) var(--space-page);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
 
-/* ---------------------------------------------------------------------------
-   Feedback: alerts, notices, empty and loading states
---------------------------------------------------------------------------- */
+/* The foot of the list: client-side paging over loaded notes, the timeline's own report of its last read, and a way back to the top of a long list. */
+.feed-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--space-page) var(--s-6);
+  border-top: 1px solid var(--line);
+}
+.feed-more {
+  gap: var(--s-2);
+}
+.feed-more-count {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.feed-status {
+  display: inline;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+/* The reasons behind the count, one sentence each, behind a disclosure: still printed in
+   the page and reachable on every width, but never the second-loudest text on it. The
+   disclosure is inline after the count's sentence, and its sentences open as blocks under
+   the whole line. */
+.feed-details {
+  display: inline;
+  margin: 0 0 0 var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.feed-details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.feed-details p {
+  display: block;
+  margin: 0 0 var(--s-1);
+  overflow-wrap: anywhere;
+}
+.feed-status-dropped,
+.feed-status-refused {
+  color: var(--ink-2);
+}
+/* What the server said it holds against what this client read. It only raises its voice
+   when something was declared and never arrived. */
+.feed-reach {
+  margin: 0;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.feed-reach--short {
+  color: var(--ink-2);
+}
+/* Saved list */
+.unavailable-saved {
+  padding: var(--s-4) var(--space-page);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.unavailable-saved h2 {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  margin: 0 0 var(--s-2);
+}
+.unavailable-saved p {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  margin: 0;
+}
+.saved-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-2);
+  margin-top: var(--s-3);
+}
+.saved-link > div {
+  min-width: 0;
+}
+.saved-link span {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.saved-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.saved-link button {
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+   Feedback
+   Alerts and failure details, the toast, the session reminder, empty and loading
+   states, the way back to the top.
+=========================================================================== */
+/* Feedback: alerts, notices, empty and loading states */
 .page-error {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  position: relative;
   background: var(--danger-soft);
   border: 1px solid var(--danger-line);
-  padding: var(--s3) var(--s10) var(--s3) var(--s4);
-  margin: var(--s3) var(--space-page);
+  padding: var(--s-3) calc(var(--s-6) + var(--s-2)) var(--s-3) var(--s-4);
+  margin: var(--s-3) var(--space-page);
   border-radius: var(--r-md);
   color: var(--danger);
-  font-size: var(--t-1);
-  line-height: 1.6;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   overflow-wrap: anywhere;
   box-shadow: var(--shadow-sm);
 }
 .page-error p {
-  margin: var(--s1) 0 0;
+  margin: var(--s-1) 0 0;
 }
 .page-error-dismiss {
   position: absolute;
-  top: var(--s1);
-  right: var(--s1);
-  width: 32px;
-  height: 32px;
+  top: var(--s-1);
+  right: var(--s-1);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: var(--r-pill);
   color: var(--danger);
-  font-size: var(--t3);
-  line-height: 1;
 }
 .connection-form .page-error {
-  position: static;
   margin: 0;
   box-shadow: none;
+}
+/* Inline publish failure: in flow, right under the composer's button row. */
+.composer .compose-error {
+  margin: var(--s-3) 0 0;
+  padding-right: var(--s-4);
+}
+.compose-error:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+.error-detail {
+  margin-top: var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.error-detail summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.error-detail pre {
+  margin: 0 0 var(--s-1);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
 }
 /* Render-halt fallback from the entry point: plain words, details on request. */
 .app-error {
   max-width: 560px;
-  margin: var(--s12) auto;
-  padding: var(--s5);
+  margin: calc(var(--s-6) + var(--s-4)) auto;
+  padding: var(--s-5);
   border: 1px solid var(--danger-line);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-md);
   background: var(--danger-soft);
   color: var(--danger);
   font-family: var(--font);
-  line-height: 1.6;
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
 }
 .app-error p {
-  margin: 0 0 var(--s3);
+  margin: 0 0 var(--s-3);
   font-weight: 600;
 }
 .app-error pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: var(--t-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
 }
-.notice {
-  margin: var(--s3) var(--space-page);
+/* Toast: a narrow pill fixed at the bottom of the viewport, out of the column's flow. It
+   moves nothing - the composer at the top and the first card stay exactly where they were
+   while it stands, so a second tap lands on the control it was aimed at - and it lets taps
+   through: only its own close control takes the pointer. It sits above the phone tab bar
+   and the 맨 위로 slot, safe-area aware; a reply composer scrolled to the bottom can be
+   overlapped by it for its three seconds, but never blocked. On the desktop layout it is
+   not fixed at all: the shell places it at the foot of the right column (see below), so it
+   never stands over the reading column's actions. */
+.toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--space-page) + var(--tap) + var(--s-2) + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0 var(--space-page);
+  pointer-events: none;
+}
+.toast {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  max-width: min(100%, 480px);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
   border: 1px solid var(--success-line);
-  padding: var(--s3) var(--s4);
-  border-radius: var(--r-md);
-  font-size: var(--t-1);
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--success);
   background: var(--success-soft);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: toast-in 180ms ease-out;
+}
+.toast-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--tap);
+  min-height: var(--tap);
+  border: 1px solid var(--success-line);
+  border-left: 0;
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  color: var(--success);
+  background: var(--success-soft);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  animation: toast-in 180ms ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+}
+/* Said once after a connect that left the token in memory: quiet, in the column's flow, and
+   closed for good by its own control. It wraps rather than truncating - the sentence is the
+   whole point of it. */
+.session-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--space-page);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+.session-hint .icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--ink-muted);
+}
+.session-hint p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+}
+.session-hint-dismiss {
+  flex: 0 0 auto;
+  width: var(--tap);
+  height: var(--tap);
+  margin: calc(var(--s-2) * -1) 0;
+  color: var(--ink-muted);
+}
+/* On the desktop layout it sits under the account line, in the right column, so the first
+   card keeps its place; on one column it follows the composer at the composer's own inset. */
+.context-column .session-hint {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.main-column .session-hint {
+  padding-block: var(--s-2);
+}
+.main-column .session-hint p {
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+}
+/* On a phone it is one compact line in the column's flow, under the composer: nothing is
+   painted over a card or the list's foot, and the first card moves down by one line. The
+   sentence is clipped to that line until 자세히 opens it; 안내 닫기 still ends it for good. */
+.session-hint-more {
+  display: none;
 }
 .empty-state {
-  padding: var(--s12) var(--s6);
+  padding: calc(var(--s-6) + var(--s-4)) var(--s-5);
   text-align: center;
 }
-.empty-state > span {
-  font-size: 44px;
+.empty-state-icon {
+  width: calc(var(--icon) * 2);
+  height: calc(var(--icon) * 2);
   color: var(--accent-line);
 }
 .empty-state h2 {
-  font-size: var(--t3);
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
   font-weight: 600;
-  margin: var(--s2) 0;
+  margin: var(--s-2) 0;
 }
 .empty-state p {
-  font-size: var(--t0);
+  font-size: var(--t-body);
   color: var(--ink-muted);
-  line-height: 1.7;
-  margin: 0 0 var(--s4);
+  line-height: var(--lh-body);
+  margin: 0 0 var(--s-4);
 }
 .feed-footnote {
-  padding: var(--s4) var(--space-page);
-  font-size: var(--t-1);
+  padding: var(--s-4) var(--space-page);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
   color: var(--ink-muted);
 }
 .skeleton-card {
   display: flex;
-  gap: var(--s3);
-  padding: var(--s5) var(--space-page);
+  gap: var(--s-3);
+  padding: var(--s-5) var(--space-page);
   border-bottom: 1px solid var(--line);
 }
 .skeleton-avatar,
@@ -1155,8 +2521,8 @@ a.reply-context {
 .skeleton-lines {
   flex: 1;
   display: grid;
-  gap: var(--s3);
-  padding-top: var(--s1);
+  gap: var(--s-3);
+  padding-top: var(--s-1);
 }
 .skeleton-line {
   height: 12px;
@@ -1179,91 +2545,234 @@ a.reply-context {
     transform: translateX(100%);
   }
 }
-@media (prefers-reduced-motion: reduce) {
-  .skeleton-avatar::after,
-  .skeleton-line::after {
-    animation: none;
-  }
-  * {
-    transition-duration: 0ms !important;
-  }
-}
-
-/* Saved list */
-.unavailable-saved {
-  padding: var(--s4) var(--space-page);
-  border-bottom: 1px solid var(--line);
-  background: var(--surface-2);
-}
-.unavailable-saved h2 {
-  font-size: var(--t0);
-  margin: 0 0 var(--s2);
-}
-.unavailable-saved p {
-  font-size: var(--t-1);
-  line-height: 1.6;
-  color: var(--ink-muted);
-  margin: 0;
-}
-.saved-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  border-top: 1px solid var(--line);
-  padding-top: var(--s2);
-  margin-top: var(--s3);
-}
-.saved-link > div {
-  min-width: 0;
-}
-.saved-link span {
-  display: block;
-  overflow-wrap: anywhere;
-  color: var(--ink-muted);
-  font-size: var(--t-1);
-}
-.saved-link a {
+.to-top {
+  position: fixed;
+  right: var(--space-page);
+  bottom: var(--space-page);
+  z-index: var(--z-float);
   display: inline-flex;
   align-items: center;
+  gap: var(--s-1);
   min-height: var(--tap);
-  font-size: var(--t-1);
-  font-weight: 600;
-  color: var(--accent);
-  text-decoration: underline;
-}
-.saved-link button {
-  white-space: nowrap;
-}
-
-/* Accessibility helpers */
-.sr-only,
-.skip-link:not(:focus) {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.skip-link:focus {
-  position: fixed;
-  top: var(--s2);
-  left: var(--s2);
-  z-index: 2;
-  padding: var(--s3);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
   background: var(--surface);
-  color: var(--ink);
-  border: 2px solid var(--accent);
-  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-md);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  animation: to-top-in 160ms ease-out;
+}
+@keyframes to-top-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-/* ---------------------------------------------------------------------------
-   Hover (pointer devices only)
---------------------------------------------------------------------------- */
+/* ===========================================================================
+   Density
+   Desktop density (from the wide breakpoint, fine pointers), the compact setting,
+   coarse pointers.
+=========================================================================== */
+/* Desktop density: 36px controls and tighter cards on wide, fine-pointer screens. Coarse pointers keep 44px targets whatever the width. */
+@media (min-width: 1100px) {
+  :root {
+    --tap: 36px;
+  }
+  .note-card {
+    padding-top: var(--s-4);
+    padding-bottom: var(--s-1);
+  }
+  .note-actions .text-button {
+    padding: var(--s-1) var(--s-2);
+  }
+  .composer {
+    padding-top: var(--s-4);
+  }
+  .compose-input textarea {
+    min-height: 60px;
+  }
+  /* The content-warning reveal keeps its 44px target: it is the one control read before the
+     words, and it sits inside body text. */
+  .content-warning-toggle {
+    min-height: 44px;
+  }
+  .primary-button,
+  .secondary-button {
+    padding-block: var(--s-1);
+  }
+  .connection-actions .primary-button,
+  .explore-button {
+    flex: 0 1 auto;
+    min-width: 160px;
+  }
+}
+@media (min-width: 1100px) {
+  .sidebar-switch {
+    display: inline-flex;
+  }
+}
+/* The right column is a flex column so the toast can rest at its foot: with short content
+   the pill sits at the bottom of the column's viewport-high box, and under a long thread it
+   sticks to the bottom edge of the column's own scrollport, so it is always on screen. It
+   lets every pointer through, and the column keeps room under its content while the toast
+   stands, so the last action row is never beneath it at the end of the scroll. */
+@media (min-width: 1100px) {
+  .context-column {
+    display: flex;
+    flex-direction: column;
+  }
+  .context-column > * {
+    flex-shrink: 0;
+  }
+  .context-column .toast-region {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding: var(--s-3) 0 0;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+  .context-column:has(.toast) {
+    padding-bottom: calc(var(--s-5) + var(--tap) + var(--s-3));
+  }
+  .context-column .toast {
+    max-width: 100%;
+  }
+}
+/* Wide screens: use the gutter so the thread column fits a full action row on one line. */
+@media (min-width: 1280px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 640px) minmax(380px, 460px);
+    max-width: 1400px;
+  }
+}
+/* Compact density (desktop, fine pointer): 14px/1.5 body, 12/16px card padding, 32px controls, meta on one line. Phones and coarse pointers ignore the setting. */
+@media (min-width: 1100px) {
+  .app-shell[data-density='compact'] {
+    --avatar: 32px;
+  }
+  .app-shell[data-density='compact'] .note-card {
+    padding: var(--s-2) var(--s-4) var(--s-1);
+    gap: var(--s-3);
+  }
+  .app-shell[data-density='compact'] .note-header {
+    flex-wrap: nowrap;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .app-shell[data-density='compact'] .author {
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-shell[data-density='compact'] .timestamp {
+    white-space: nowrap;
+  }
+  .app-shell[data-density='compact'] .note-content {
+    font-size: var(--t-body);
+    line-height: var(--lh-body);
+    margin: var(--s-1) 0 0;
+  }
+  .app-shell[data-density='compact'] .note-content p:not(:last-child) {
+    margin-bottom: var(--s-2);
+  }
+  /* Each cue keeps the leading of its own type step; density only closes the gaps. */
+  .app-shell[data-density='compact'] .note-context,
+  .app-shell[data-density='compact'] .reply-context,
+  .app-shell[data-density='compact'] .shared-by {
+    margin-top: 0;
+  }
+  .app-shell[data-density='compact'] .note-actions {
+    margin-top: 0;
+    gap: 0;
+  }
+  .app-shell[data-density='compact'] .note-actions .text-button {
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    padding-block: var(--s-1);
+  }
+  .app-shell[data-density='compact'] .composer {
+    padding-top: var(--s-3);
+    padding-bottom: var(--s-2);
+  }
+  .app-shell[data-density='compact'] .note-card--focused .note-content {
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+  }
+  .app-shell[data-density='compact'] .thread-ancestors .note-content {
+    font-size: var(--t-body);
+    line-height: var(--lh-body);
+  }
+  .app-shell[data-density='compact'] .page-header {
+    min-height: 44px;
+  }
+  /* Compact turns the warning box into one line: the warning text, then 내용 보기 inline as
+     a text control, with the warm bar kept as a left rule so the line is still marked. */
+  .app-shell[data-density='compact'] .content-warning {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: var(--s-2);
+    margin: var(--s-1) 0 0;
+    padding: 0 0 0 var(--s-2);
+    border: 0;
+    border-left: 3px solid var(--warn);
+    border-radius: 0;
+    background: none;
+  }
+  .app-shell[data-density='compact'] .content-warning-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--t-body);
+    line-height: var(--lh-body);
+  }
+  .app-shell[data-density='compact'] .content-warning-label svg {
+    margin-top: 2px;
+  }
+  .app-shell[data-density='compact'] .content-warning-toggle {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 0 var(--s-1);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .app-shell[data-density='compact'] .content-warning-toggle[aria-expanded='true'] {
+    background: none;
+    text-decoration: none;
+  }
+}
+@media (min-width: 1100px) and (pointer: fine) {
+  .app-shell[data-density='compact'] {
+    --tap: 32px;
+  }
+}
+@media (pointer: coarse) {
+  :root {
+    --tap: 44px;
+  }
+}
+
+/* ===========================================================================
+   Responsive and container steps
+   Hover, reduced motion, the viewport breakpoints (design-tokens.ts BREAKPOINTS:
+   wide 1100, gutter 1280, phone 650), then the container steps, last of all.
+=========================================================================== */
+/* Hover (pointer devices only) */
 @media (hover: hover) {
   .nav-item:hover {
     background: var(--surface-2);
@@ -1275,7 +2784,7 @@ a.reply-context {
     background: var(--accent-strong);
     border-color: var(--accent-strong);
   }
-  .refresh-button:hover:not(:disabled),
+  .icon-button:hover:not(:disabled),
   .secondary-button:hover:not(:disabled) {
     background: var(--surface-2);
   }
@@ -1285,46 +2794,61 @@ a.reply-context {
   }
   .reaction-button[aria-pressed='true']:hover:not(:disabled),
   .save-button[aria-pressed='true']:hover:not(:disabled) {
-    background: var(--accent-soft);
+    background: var(--surface-2);
     color: var(--accent);
   }
   .author:hover,
   .timestamp:hover,
-  .disconnect-button:hover,
   .back-button:hover {
     text-decoration: underline;
   }
 }
 
-/* ---------------------------------------------------------------------------
-   Responsive
---------------------------------------------------------------------------- */
-@media (max-width: 1100px) {
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-avatar::after,
+  .skeleton-line::after,
+  .toast,
+  .toast-dismiss,
+  .to-top,
+  .icon--spin {
+    animation: none;
+  }
+  * {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* Responsive */
+@media (max-width: 1099px) {
   .app-shell {
     grid-template-columns: 184px minmax(0, 640px);
     max-width: 900px;
-    gap: var(--s5);
+    gap: var(--s-5);
   }
   .context-column {
     display: none;
   }
-  .text-button.sidebar-disconnect {
+  .nav-item.sidebar-disconnect {
+    display: flex;
+  }
+  /* A real account disconnects from its sheet, opened from the header. */
+  .sidebar--account .sidebar-disconnect {
+    display: none;
+  }
+  .icon-button.account-button {
     display: inline-flex;
-    justify-content: flex-start;
-    padding-inline: var(--s3);
-    margin-left: calc(var(--s3) * -1);
   }
 }
 @media (max-width: 650px) {
   :root {
-    --space-page: var(--s4);
+    --space-page: var(--s-4);
     --avatar: 36px;
   }
   .app-shell {
     display: block;
     padding: 0;
   }
-  /* Sidebar becomes a compact top bar: brand + disconnect, then a 4-up tab row. */
+  /* Before connecting the sidebar is a brand row; connected, its nav is a bottom tab bar. */
   .sidebar {
     position: static;
     height: auto;
@@ -1332,107 +2856,390 @@ a.reply-context {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--s2) var(--s3);
-    padding: var(--s3) var(--s4) 0;
+    gap: var(--s-2) var(--s-3);
+    padding: var(--s-3) var(--s-4);
     background: var(--ground);
     border-bottom: 1px solid var(--line);
   }
+  .sidebar--connected {
+    padding: 0;
+    border: 0;
+  }
+  .sidebar--connected .brand {
+    display: none;
+  }
+  .header-wordmark {
+    display: inline;
+  }
   .brand {
     flex: 1;
-    font-size: var(--t4);
+    font-size: var(--t-xl);
+    line-height: var(--lh-xl);
     letter-spacing: -0.8px;
   }
   .brand-mark {
     width: 30px;
     height: 32px;
-    font-size: var(--t4);
-    border-radius: 10px 10px 10px 2px;
+    font-size: var(--t-xl);
+    line-height: var(--lh-xl);
+    border-radius: var(--r-md) var(--r-md) var(--r-md) var(--r-sm);
   }
   .brand-caption,
-  .sidebar-bottom,
-  .sidebar-compose {
+  .sidebar-bottom {
     display: none;
   }
-  .sidebar-disconnect {
-    order: 2;
-    margin: 0;
-    font-size: var(--t-1);
-  }
   .main-nav {
-    order: 3;
-    width: 100%;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-tab-bar);
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--s1);
-    margin: var(--s1) 0 0;
-    overflow-x: auto;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    padding: 0 var(--s-1) env(safe-area-inset-bottom);
+    background: var(--surface);
+    border-top: 1px solid var(--line);
   }
-  .nav-item {
+  .nav-item,
+  .nav-item.sidebar-disconnect,
+  .sidebar-compose {
+    display: flex;
     flex-direction: column;
     justify-content: center;
-    gap: 2px;
+    gap: var(--s-1);
     min-height: 56px;
-    padding: var(--s1) 2px;
-    border-radius: var(--r-md) var(--r-md) 0 0;
-    font-size: var(--t-1);
+    margin: 0;
+    padding: var(--s-1);
+    border-radius: 0;
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
     font-weight: 600;
     white-space: nowrap;
     text-align: center;
+    color: var(--ink-muted);
+  }
+  .sidebar--account .sidebar-disconnect {
+    display: none;
+  }
+  /* The fifth tab writes: the same shape as the four list tabs, word under icon. */
+  .sidebar-compose {
+    flex-direction: column-reverse;
+    background: none;
+    border: 0;
+    color: var(--accent);
   }
   .nav-item.active {
-    background: var(--surface);
-    box-shadow: inset 0 -3px 0 var(--accent);
+    background: none;
+    box-shadow: inset 0 2px 0 var(--accent);
+    color: var(--accent);
   }
   .main-column {
     border: 0;
-    min-height: calc(100dvh - 120px);
-    padding-bottom: env(safe-area-inset-bottom);
+    min-height: calc(100dvh - 56px);
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
   }
   .page-header {
-    padding-block: var(--s3);
+    min-height: 48px;
+    padding-inline: var(--s-3) var(--s-1);
   }
   .page-header h1 {
-    font-size: var(--t4);
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
   }
-  .refresh-button {
-    padding-inline: var(--s2);
+  .page-title {
+    flex: 1;
   }
-  .demo-pill {
-    margin-top: var(--s2);
-  }
-  .connection-panel {
-    padding: var(--s8) var(--s5) var(--s6);
-  }
-  .welcome-description {
-    font-size: var(--t0);
-  }
-  .character-count {
-    display: none;
-  }
-  .feed-count {
-    display: none;
+  /* Search collapses to its icon; the label keeps a 44px target and expands on focus. */
+  .search-field {
+    flex: 0 0 auto;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-2);
   }
   .search-field input {
-    font-size: var(--t2);
+    width: 0;
+    padding: 0;
+    opacity: 0;
+  }
+  .search-field .search-label {
+    min-width: var(--tap);
+    justify-content: center;
+  }
+  .search-field:focus-within .search-label,
+  .search-field:has(input:not(:placeholder-shown)) .search-label {
+    min-width: 0;
+  }
+  .search-field:focus-within,
+  .search-field:has(input:not(:placeholder-shown)) {
+    flex: 1 1 auto;
+    width: auto;
+    padding: 0 var(--s-3);
+    justify-content: flex-start;
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+  .search-field:focus-within input,
+  .search-field:has(input:not(:placeholder-shown)) input {
+    width: 100%;
+    padding: var(--s-2) 0;
+    opacity: 1;
+  }
+  .page-header:has(.search-field:focus-within) .page-title,
+  .page-header:has(.search-field input:not(:placeholder-shown)) .page-title {
+    display: none;
+  }
+  .character-count:not(.character-count--over) {
+    display: none;
+  }
+  /* The whole sentence, on two lines if it must: a clipped "게시·답글·좋아요…" says nothing. */
+  .demo-pill {
+    max-height: none;
+    padding-block: var(--s-1);
+  }
+  .demo-pill > span {
+    white-space: normal;
   }
   .note-card {
-    gap: var(--s3);
+    gap: var(--s-3);
   }
+  .note-actions .count {
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+  }
+  /* 16px keeps iOS from zooming the page when the field takes focus. */
+  .compose-input textarea {
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+  }
+  .thread-reply .note-card {
+    padding-left: calc(var(--space-page) + var(--s-2));
+  }
+  .thread-reply .inline-reply .composer {
+    padding-left: calc(var(--space-page) + var(--s-2) - 3px);
+  }
+  .sidebar-shortcuts {
+    display: none;
+  }
+  .app-shell--landing .sidebar {
+    padding: var(--s-3) var(--s-4);
+  }
+  .connection-panel {
+    padding: var(--s-5) var(--s-4) var(--s-5);
+  }
+  .connection-panel h1 {
+    font-size: var(--t-xl);
+    line-height: var(--lh-xl);
+  }
+  .app-shell--landing .main-column {
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 650px) {
+  .main-column .session-hint {
+    align-items: center;
+    min-height: 36px;
+    padding-block: 0;
+  }
+  .main-column .session-hint .icon {
+    margin-top: 0;
+  }
+  .main-column .session-hint p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .main-column .session-hint--open {
+    align-items: flex-start;
+    padding-block: var(--s-2);
+  }
+  .main-column .session-hint--open p {
+    white-space: normal;
+  }
+  .main-column .session-hint-more {
+    display: inline-flex;
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding-inline: var(--s-2);
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+  }
+  .main-column .session-hint-dismiss {
+    margin-block: calc(var(--s-1) * -1);
+  }
+}
+/* Phones: two indents at most, then the cue. */
+@media (max-width: 650px) {
+  .thread-reply {
+    --indent: var(--s-4);
+    --indents: min(var(--depth, 0), 2);
+  }
+  .thread-reply[data-depth='3'] .reply-cue {
+    display: block;
+  }
+  .thread-reply[data-depth='3'] .note-card {
+    padding-top: var(--s-2);
+  }
+}
+@media (max-width: 650px) {
+  .compose-options .warning-toggle {
+    width: 100%;
+  }
+}
+/* --- end note body --- */
+
+/* Touch targets: on a phone (and on any coarse pointer) the two controls that used to be text-height - the author's name and the "원글 보기" cue - reach 44px through padding, so the card keeps its shape and the thumb still lands. */
+@media (max-width: 650px), (pointer: coarse) {
+  .author {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    padding-block: var(--s-2);
+  }
+  button.author {
+    min-height: var(--tap);
+  }
+  .reply-context--button,
+  a.reply-context {
+    min-height: var(--tap);
+    padding-block: var(--s-2);
+  }
+}
+
+/* On a phone the tab bar owns the bottom edge: the control sits above it, never on 새 글 쓰기,
+   and the toast stands one slot higher so the two never meet. */
+@media (max-width: 650px) {
+  .to-top {
+    right: 0;
+    left: 0;
+    width: fit-content;
+    margin-inline: auto;
+    bottom: calc(56px + var(--s-3) + env(safe-area-inset-bottom));
+  }
+  /* The toast is a full-width strip directly above the tab bar for its three seconds, never
+     on the bar itself: a tap at 답글 in the bar reaches the bar, not the toast. Every tap
+     passes through it (there is no close control on a phone; it clears by itself), and the
+     맨 위로 control steps up over it while it stands. */
+  .toast-region:has(.toast) {
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    z-index: var(--z-toast-phone);
+    padding: 0;
+    pointer-events: none;
+  }
+  .toast {
+    flex: 1 1 auto;
+    max-width: none;
+    min-height: 56px;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    box-shadow: none;
+    pointer-events: none;
+    animation: none;
+  }
+  .toast-dismiss {
+    display: none;
+  }
+  .app-shell:has(.toast) .to-top {
+    bottom: calc(56px + 56px + var(--s-3) + env(safe-area-inset-bottom));
+  }
+}
+
+/* Container steps: how wide the card or the column is, not how wide the window is. Last in the file because a container query carries no specificity of its own, so it has to come after every rule it narrows. The steps are named in presentation/design-tokens.ts (`CONTAINER_STEPS`) and design-system.test.ts holds the two files to the same numbers: card.fold     511  my own row folds 수정/삭제 behind 관리; panel density; wrap allowed card.counted  419  a counted 공유/좋아요/대화 keeps its number and folds its word card.tight    387  smallest type step and the small icons card.saveFold 349  저장 folds into the 관리 row too card.icons    299  someone else's 공유, 좋아요, 저장 fold to their icons column.picker 419  the visibility picker folds to 2x2 A container query measures the content box, so a card step is the old column width less the card's horizontal padding (48px in a desktop column, 32px on a phone or in the panel): a reply three deep in the 460px panel is a 388px card, a phone card two deep is 358px. */
+/* Under 512px - the reading column of an 1100 to 1280 window, the thread panel, a phone -
+   seven controls with their words no longer share a line. My own row folds 수정 and 삭제
+   behind 관리 (`aria-expanded` on the control, `data-open` on the group) and takes the
+   panel's density: one type step down, the tightest padding, no gap. Should a row still
+   not fit, it wraps rather than scrolling sideways, so every control keeps its target. */
+@container card (max-width: 511px) {
   .note-actions {
-    gap: 0;
-    margin-left: calc(var(--s2) * -1);
+    flex-wrap: wrap;
+    overflow-x: visible;
+    gap: var(--s-1) 0;
+    margin-left: calc(var(--s-1) * -1);
   }
   .note-actions .text-button {
-    padding-inline: 4px;
-    font-size: var(--t0);
+    padding-inline: var(--s-1);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
   }
-  .note-actions .thread-button .count {
-    font-size: 12px;
+  .manage-toggle {
+    display: inline-flex;
   }
-  .conversation > .post-with-reply .note-card {
-    padding-left: calc(var(--space-page) + var(--s3));
+  .manage-group:not([data-open]) {
+    display: none;
   }
-  .conversation > .post-with-reply .inline-reply .composer {
-    padding-left: calc(var(--space-page) + var(--s3) - 3px);
+  /* Opened, the group is a row of its own under the six, on the surface the open 관리
+     control already carries: the reading actions never reflow when it opens, whatever the
+     card's width, and the destructive control is still the last thing in it. */
+  .note-manage-row[data-open] {
+    display: flex;
+    flex: 1 0 100%;
+    align-items: center;
+    gap: inherit;
+    margin-top: var(--s-1);
+    padding-inline: var(--s-1);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+}
+/* Under 420px - the 1100 reading column (a 356px row), every panel card - a like, share or
+   대화 that carries a count keeps its icon and the number and folds its word (the accessible
+   name keeps it): six of my own with two-digit counts then share one line. */
+@container card (max-width: 419px) {
+  .note-actions :is(.reaction-button, .thread-button)[data-count] {
+    --action-word: folded;
+    min-width: var(--tap);
+    justify-content: center;
+  }
+}
+/* Under 420px the visibility picker folds from four cells to an even 2x2. */
+@container column (max-width: 419px) {
+  .visibility-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Under 388px - a phone, a panel reply two deep - the row goes to the smallest type step
+   and the small icons; each control still spans the target size both ways. */
+@container card (max-width: 387px) {
+  .note-actions .text-button {
+    gap: var(--s-1);
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+  }
+  .note-actions .icon {
+    width: var(--icon-sm);
+    height: var(--icon-sm);
+    stroke-width: 2;
+  }
+}
+/* Narrower still - a phone reply one level deep (334px), a panel card three deep - the six
+   of my own row no longer share a line with their words (315px on a 298px row): 저장 folds
+   into the 관리 row, where the group's own copy of it is drawn instead, so five stay on
+   one line and the sixth is one tap away with 수정 and 삭제. */
+@container card (max-width: 349px) {
+  .note-actions:has(.save-button--folded) > .save-button:not(.save-button--folded) {
+    display: none;
+  }
+  .save-button--folded {
+    display: inline-flex;
+  }
+}
+/* Under 300px - the desktop panel at its narrowest, one reply deep - someone else's five
+   no longer fit with every word (262px on a 254px row): 공유, 좋아요 and 저장 keep their
+   icons and fold their words, as a counted reaction does; the names keep them. 답글 and
+   대화 keep theirs, so the row still says what it opens. A phone never gets here: its
+   deepest card (318px) holds the five words. */
+@container card (max-width: 299px) {
+  .note-actions:not(:has(.manage-toggle)) :is(.reaction-button, .save-button) {
+    --action-word: folded;
+    min-width: var(--tap);
+    justify-content: center;
   }
 }

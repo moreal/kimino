@@ -1,5 +1,14 @@
 import type { ASObject, Evaluation, NoteReaction, TimelineNote } from './social';
 import { record, str, iri, isType, kind, sameOrigin } from './activitystreams';
+import { inferVisibility, normalizeAttachments, recipients } from './note-content';
+
+interface EvaluateOptions {
+  /** The followers collection of an author when known (usually only the session actor). */
+  followersOf?: (author: string) => string | undefined;
+  /** The reading actor: a note addressed only to them (and other people) is direct. */
+  self?: string;
+}
+const summaryOf = (value: unknown) => str(value)?.trim() || undefined;
 function stable(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(stable).join(',') + ']';
   if (record(value))
@@ -34,7 +43,32 @@ function mentions(tag: unknown): string[] {
   }
   return [...found].sort(compare);
 }
-function toNote(value: ASObject): TimelineNote | undefined {
+/**
+ * A Tombstone stands for an object the server says no longer exists. Some servers answer a
+ * deleted object with one (`formerType` naming what it was), and leave the original Create
+ * or Update in the outbox with its object swapped for it.
+ */
+export const isTombstone = (value: unknown): boolean =>
+  record(value) && (isType(value, 'Tombstone') || value.formerType !== undefined);
+/** True when the activity is, or carries, a Tombstone: it reports a deletion, not content. */
+const buries = (a: ASObject) => isTombstone(a) || isTombstone(a.object);
+/** The IRI a burying activity names, when the Tombstone carries one. */
+const buriedId = (a: ASObject) => (isTombstone(a) ? iri(a) : iri(a.object));
+
+/**
+ * The reader's own Like or Announce on `note` as an activity a withdrawal can address.
+ * Withdrawing means deleting that activity, so a reaction whose IRI the snapshot never
+ * carried is not withdrawable: the client must say so instead of guessing an IRI.
+ */
+export function ownReaction(
+  note: Pick<TimelineNote, 'reactions'>,
+  kind: NoteReaction['kind'],
+  actor?: string,
+): NoteReaction | undefined {
+  if (!actor) return undefined;
+  return note.reactions.find((r) => r.kind === kind && r.actor === actor && isHttp(r.activity));
+}
+function toNote(value: ASObject, options: EvaluateOptions): TimelineNote | undefined {
   const id = iri(value),
     author = iri(value.attributedTo);
   if (
@@ -45,10 +79,19 @@ function toNote(value: ASObject): TimelineNote | undefined {
     typeof value.content !== 'string'
   )
     return undefined;
+  const mentioned = mentions(value.tag);
   return {
     id,
     author,
     content: value.content,
+    summary: summaryOf(value.summary),
+    visibility: inferVisibility(
+      recipients(value.to),
+      recipients(value.cc),
+      options.followersOf?.(author),
+      [author, ...mentioned, ...(options.self ? [options.self] : [])],
+    ),
+    attachments: normalizeAttachments(value.attachment),
     published: str(value.published),
     updated: str(value.updated),
     inReplyTo: iri(value.inReplyTo),
@@ -56,15 +99,32 @@ function toNote(value: ASObject): TimelineNote | undefined {
     announcedBy: [],
     likedBy: [],
     reactions: [],
-    mentions: mentions(value.tag),
+    mentions: mentioned,
   };
+}
+/**
+ * The first pages of the collections, read after a write, laid over everything the last
+ * full read holds. Activities are keyed by IRI (by content when they have none): one the
+ * server sent again replaces the held copy - a Create whose object the server has since
+ * rewritten as a Tombstone must win over the copy still carrying the note - and an
+ * activity that fell off the first page stays held, since nothing said it was gone. Order
+ * is not meaningful here; `evaluateActivities` sorts deterministically. Pure.
+ */
+export function mergeActivities(
+  existing: readonly ASObject[],
+  incoming: readonly ASObject[],
+): ASObject[] {
+  const merged = new Map<string, ASObject>();
+  for (const activity of existing) merged.set(iri(activity) ?? stable(activity), activity);
+  for (const activity of incoming) merged.set(iri(activity) ?? stable(activity), activity);
+  return [...merged.values()];
 }
 interface Reaction {
   actor: string;
   note: string;
 }
 /** A deterministic snapshot evaluator for the compact ActivityStreams subset documented in README.md. */
-export function evaluateActivities(input: ASObject[]): Evaluation {
+export function evaluateActivities(input: ASObject[], options: EvaluateOptions = {}): Evaluation {
   const diagnostics = { ignored: 0, rejected: 0 };
   const unique = new Map<string, ASObject>();
   // Resolve conflicting repeated activity IDs consistently, independent of page order.
@@ -79,8 +139,10 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
   const direct = new Set<string>();
   const announcements = new Map<string, Reaction>();
   const likes = new Map<string, Reaction>();
+  const deleted = new Set<string>();
   // Establish immutable ownership before evaluating mutations and tombstones.
   for (const a of activities) {
+    if (buries(a)) continue;
     const type = kind(a);
     if (!type) {
       diagnostics.ignored++;
@@ -88,7 +150,7 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
     }
     if (!['Create', 'Note', 'Announce'].includes(type)) continue;
     const object = type === 'Note' ? a : a.object;
-    const n = record(object) ? toNote(object) : undefined;
+    const n = record(object) ? toNote(object, options) : undefined;
     const actor = iri(a.actor);
     if (!n || (type === 'Create' && actor !== n.author) || (type === 'Announce' && !actor)) {
       diagnostics.rejected++;
@@ -102,12 +164,32 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
     if (type === 'Announce') announcements.set(iri(a) ?? stable(a), { actor: actor!, note: n.id });
     else direct.add(n.id);
   }
+  // Burials are read next, before any mutation: a server that answers a deleted object with
+  // a Tombstone leaves the original Create in place with the Tombstone as its object, so the
+  // note must not come back from that Create, from an Announce, or from a stale Update. A
+  // Tombstone wrapped in someone's activity is that someone's word, though, and only the
+  // author may take their note out: Mastodon's Delete carries a Tombstone, and one relayed
+  // from anyone else over a note known here is refused. A bare Tombstone, or one in an
+  // activity naming no actor, is the server's own answer and stands; so does one over a
+  // note nobody loaded, since there is nothing of anyone's to protect.
+  for (const a of activities) {
+    if (!buries(a)) continue;
+    const id = buriedId(a);
+    if (!id) continue;
+    const actor = isTombstone(a) ? undefined : iri(a.actor);
+    const owner = notes.get(id)?.author;
+    if (actor && owner && actor !== owner) {
+      diagnostics.rejected++;
+      continue;
+    }
+    deleted.add(id);
+  }
   // Likes never establish notes; they only attach to notes known from Create/Note/Announce.
   for (const a of activities) {
-    if (kind(a) !== 'Like') continue;
+    if (buries(a) || kind(a) !== 'Like') continue;
     const actor = iri(a.actor),
       target = iri(a.object);
-    const embedded = record(a.object) ? toNote(a.object) : undefined;
+    const embedded = record(a.object) ? toNote(a.object, options) : undefined;
     // An embedded object that is not a valid Note (e.g. cross-origin attributedTo) is as suspect
     // as an author mismatch: it must not attach to the known note under the same IRI.
     const malformed = record(a.object) && !embedded;
@@ -125,8 +207,16 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
     if (!known) continue;
     likes.set(iri(a) ?? stable(a), { actor, note: known.id });
   }
-  const deleted = new Set<string>();
+  /** Withdraws `actor`'s own Like or Announce named by `id`; false when there is none. */
+  const withdraw = (id: string | undefined, actor: string | undefined): boolean => {
+    const source = id ? (announcements.has(id) ? announcements : likes) : undefined;
+    const target = id ? source?.get(id) : undefined;
+    if (!target || target.actor !== actor) return false;
+    source!.delete(id!);
+    return true;
+  };
   for (const a of activities) {
+    if (buries(a)) continue;
     const type = kind(a),
       actor = iri(a.actor),
       id = iri(a.object);
@@ -152,6 +242,11 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
       notes.set(previous.id, {
         ...previous,
         content: str(patch.content) ?? previous.content,
+        summary: patch.summary === undefined ? previous.summary : summaryOf(patch.summary),
+        attachments:
+          patch.attachment === undefined
+            ? previous.attachments
+            : normalizeAttachments(patch.attachment),
         updated:
           str(patch.updated) ??
           str(a.updated) ??
@@ -163,14 +258,13 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
         mentions: patch.tag === undefined ? previous.mentions : mentions(patch.tag),
       });
     } else if (type === 'Delete') {
+      // A Delete removes its actor's own note, or - the only way some servers allow a
+      // reaction to be taken back - its own Like or Announce activity.
       if (id && notes.get(id)?.author === actor) deleted.add(id);
-      else diagnostics.rejected++;
+      else if (!withdraw(id, actor)) diagnostics.rejected++;
     } else if (type === 'Undo') {
       // Only the reacting actor may withdraw its own Announce or Like.
-      const source = id ? (announcements.has(id) ? announcements : likes) : undefined;
-      const target = id ? source?.get(id) : undefined;
-      if (target && target.actor === actor) source!.delete(id!);
-      else diagnostics.rejected++;
+      if (!withdraw(id, actor)) diagnostics.rejected++;
     }
   }
   const reactions = new Map<string, NoteReaction[]>();
@@ -197,5 +291,5 @@ export function evaluateActivities(input: ASObject[]): Evaluation {
     );
   }
   result.sort((a, b) => time(b.published) - time(a.published) || compare(a.id, b.id));
-  return { notes: result, diagnostics };
+  return { notes: result, deleted: [...deleted].sort(compare), diagnostics };
 }

@@ -1,102 +1,121 @@
-import { createSignal, Show, untrack } from 'solid-js';
+import { createSignal, For, Show, untrack } from 'solid-js';
+import { connectionCopy as text, copy, DEV_SERVER_URL } from '../presentation/copy';
+import FailureAlert from './FailureAlert';
+import Icon from './Icons';
+
+/**
+ * Landing: one line of promise, then the connect form and the preview button as the
+ * visual centre. The compatibility note lives in the landing aside (App renders it).
+ */
 export default function ConnectionPanel(props: {
   initialUrl: string;
   busy: boolean;
   error: string;
-  onConnect: (url: string, token: string) => void;
+  errorDetail?: string;
+  /** `remember` opts this tab into sessionStorage persistence; the default is memory only. */
+  onConnect: (url: string, token: string, remember: boolean) => void;
   onExplore: () => void;
 }) {
   const [url, setUrl] = createSignal(untrack(() => props.initialUrl));
   const [token, setToken] = createSignal('');
+  const [remember, setRemember] = createSignal(false);
   return (
     <section class="connection-panel">
-      <span class="section-kicker">나의 속도로, 나의 네트워크에서</span>
-      <h1>
-        소음은 줄이고,
-        <br />
-        대화는 가까이.
-      </h1>
-      <p class="welcome-description">
-        시간 순서대로 읽고, 한 사람의 이야기에 집중하세요.
-        <br />
-        당신의 작은 소셜 공간, Kimino.
-      </p>
-      <button class="primary-button explore-button" onClick={props.onExplore} disabled={props.busy}>
-        먼저 둘러보기 <span aria-hidden="true">→</span>
-      </button>
-      <p class="field-help">가입 없이 예시 글로 화면을 둘러볼 수 있어요.</p>
-      <div class="connection-divider">
-        <span>내 계정으로 시작하기</span>
-      </div>
-      <div class="compatibility-note">
-        <strong>C2S 지원 계정이 필요해요</strong>
-        <p>
-          현재 일반 Mastodon 계정으로는 로그인할 수 없습니다. ONI 등 ActivityPub C2S를 지원하는
-          서버의 계정을 연결하세요.
-        </p>
-      </div>
+      <h1>{text.tagline}</h1>
+      <p class="welcome-description">{text.taglineHelp}</p>
       <form
         class="connection-form"
+        aria-labelledby="connection-heading"
         onSubmit={(event) => {
           event.preventDefault();
-          props.onConnect(url().trim(), token().trim());
+          props.onConnect(url().trim(), token().trim(), remember());
         }}
       >
+        <h2 id="connection-heading" class="connection-heading">
+          {text.accountHeading}
+        </h2>
         <label>
-          Actor URL
+          {text.actorUrlLabel}
           <input
             type="url"
             required
             value={url()}
             onInput={(event) => setUrl(event.currentTarget.value)}
-            placeholder="https://social.example/users/me"
+            placeholder={text.actorUrlPlaceholder}
             disabled={props.busy}
             autocomplete="url"
           />
+          {/* Under the field, not between label and field: the answer comes after the ask. */}
+          <span class="field-help field-help--inline">{text.actorUrlHelp}</span>
         </label>
         <label>
-          액세스 토큰
+          {text.tokenLabel}
           <input
             type="password"
             value={token()}
             onInput={(event) => setToken(event.currentTarget.value)}
-            placeholder="서버에서 발급한 Bearer 토큰"
+            placeholder={text.tokenPlaceholder}
             disabled={props.busy}
             autocomplete="off"
           />
         </label>
+        <div class="remember-field">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              checked={remember()}
+              onChange={(event) => setRemember(event.currentTarget.checked)}
+              disabled={props.busy}
+            />
+            <span>{text.remember}</span>
+          </label>
+          <p class="field-help">{remember() ? text.rememberHelp : text.tokenMemory}</p>
+        </div>
         <Show when={props.error}>
-          <div role="alert" class="page-error">
-            <strong>연결하지 못했어요</strong>
-            <p>{props.error}</p>
-            <p>
-              주소와 토큰을 확인하세요. 로컬 서버라면 아래 안내에서 인증서 설정을 확인할 수 있어요.
-            </p>
-          </div>
+          <FailureAlert
+            heading={text.connectFailed}
+            lines={[props.error, text.connectFailedHelp]}
+            detail={props.errorDetail}
+          />
         </Show>
-        <button class="primary-button" disabled={props.busy} type="submit">
-          {props.busy ? '연결 중…' : '연결하기'} <span aria-hidden="true">→</span>
-        </button>
-        <p class="field-help">
-          토큰은 이 탭의 메모리에만 보관됩니다. 새로고침하면 다시 연결해주세요.
-        </p>
+        <div class="connection-actions">
+          <button class="primary-button" disabled={props.busy} type="submit">
+            {props.busy ? text.connecting : text.connect} <Icon name="arrow-right" />
+          </button>
+          <button
+            type="button"
+            class="secondary-button explore-button"
+            onClick={props.onExplore}
+            disabled={props.busy}
+          >
+            {copy.exploreLabel} <Icon name="arrow-right" />
+          </button>
+        </div>
+        <p class="field-help">{text.exploreHelp}</p>
       </form>
       <details class="setup-help">
-        <summary>ONI 로컬 계정 연결 방법</summary>
+        <summary>{text.developerSummary}</summary>
         <ol>
-          <li>
-            터미널에서 <code>npm run c2s:up</code>, <code>npm run c2s:seed</code>를 실행합니다.
-          </li>
-          <li>
-            <a href="https://localhost:8443/" target="_blank" rel="noopener noreferrer">
-              로컬 서버 열기 ↗
-            </a>
-            에서 인증서를 확인하거나 <code>.local/c2s-root.crt</code>를 신뢰합니다.
-          </li>
-          <li>
-            Actor URL은 <code>https://localhost:8443/</code>, 토큰은{' '}
-            <code>.local/c2s-credentials.json</code>의 token입니다.
-          </li>
+          <For each={text.developerSteps}>
+            {(step) => (
+              <li>
+                <For each={step}>
+                  {(part) =>
+                    typeof part === 'string' ? (
+                      part
+                    ) : 'code' in part ? (
+                      <code>{part.code}</code>
+                    ) : (
+                      <a href={DEV_SERVER_URL} target="_blank" rel="noopener noreferrer">
+                        {part.link}
+                        <Icon name="external" class="icon--sm icon--trail" />
+                      </a>
+                    )
+                  }
+                </For>
+              </li>
+            )}
+          </For>
         </ol>
       </details>
     </section>

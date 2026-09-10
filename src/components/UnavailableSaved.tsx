@@ -1,25 +1,23 @@
 import { For, Show } from 'solid-js';
-import { safeHttpUrl } from '../ui/content';
+import { copy } from '../presentation/copy';
+import { safeHttpUrl } from '../presentation/links';
 export default function UnavailableSaved(props: { ids: string[]; onRemove: (id: string) => void }) {
   return (
     <Show when={props.ids.length}>
       <section class="unavailable-saved">
-        <h2>불러오지 못한 저장 링크 · {props.ids.length}</h2>
-        <p>
-          글 본문은 보관하지 않습니다. 아직 불러오지 않았거나, 삭제되었거나, 현재 계정에서 볼 수
-          없는 글일 수 있어요.
-        </p>
+        <h2>{copy.unavailableSaved.heading(props.ids.length)}</h2>
+        <p>{copy.unavailableSaved.body}</p>
         <For each={props.ids}>
           {(id) => (
             <div class="saved-link">
               <div>
                 <span>{id}</span>
                 <a href={safeHttpUrl(id)} target="_blank" rel="noopener noreferrer">
-                  저장한 원문 열기
+                  {copy.unavailableSaved.open}
                 </a>
               </div>
               <button class="text-button" onClick={() => props.onRemove(id)}>
-                저장 해제
+                {copy.unavailableSaved.remove}
               </button>
             </div>
           )}

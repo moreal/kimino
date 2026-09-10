@@ -1,74 +1,123 @@
 import { For, Show } from 'solid-js';
 import type { FeedState } from '../presentation/feed-view-model';
 import type { FeedView } from '../presentation/feed';
-import { disconnectLabel, navItems, type NavIcon } from '../presentation/copy';
-
-/** Simple line icons drawn with the current text color; labels carry the meaning. */
-const iconPaths: Record<NavIcon, string> = {
-  home: 'M4 11 12 4l8 7M6 10v10h5v-5h2v5h5V10',
-  reply: 'M9 14 4 9l5-5M4 9h9a7 7 0 0 1 7 7v4',
-  person: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0',
-  bookmark: 'M6 4h12v16l-6-4-6 4z',
-};
-function NavGlyph(props: { icon: NavIcon }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.7"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      class="nav-icon"
-    >
-      <path d={iconPaths[props.icon]} />
-    </svg>
-  );
-}
+import type { Density } from '../presentation/ports';
+import { copy, disconnectLabel, navItems } from '../presentation/copy';
+import { connectionDotClass } from '../presentation/view-flags';
+import Icon from './Icons';
 
 export default function Sidebar(props: {
   state: FeedState;
   onNavigate: (view: FeedView) => void;
   onCompose: () => void;
   onDisconnect: () => void;
+  onShortcuts: () => void;
+  onDensity: (density: Density) => void;
+  /** Browser preference: every content-warned note opens by itself. */
+  revealWarned: boolean;
+  onRevealWarned: (on: boolean) => void;
+  /**
+   * The account a remembered tab is reconnecting, before its timeline arrives: the
+   * navigation is drawn for it at once, on the list the tab was left on.
+   */
+  pendingAccount?: { id: string; view: FeedView };
 }) {
+  const compact = () => props.state.density === 'compact';
+  const connected = () => !!props.state.actor || !!props.pendingAccount;
+  const view = () => (props.state.actor ? props.state.view : props.pendingAccount?.view);
   return (
-    <aside class="sidebar">
-      <button class="brand" onClick={() => props.onNavigate('all')} aria-label="Kimino 홈">
-        <span class="brand-mark">
-          k<span>•</span>
+    <aside
+      class={[
+        'sidebar',
+        connected() ? 'sidebar--connected' : '',
+        // A real account keeps its exit in the account line / sheet; only the preview,
+        // which has nothing to write, leaves its exit in the tab bar.
+        connected() && !props.state.demo ? 'sidebar--account' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      <button class="brand" onClick={() => props.onNavigate('all')} aria-label={copy.sidebar.home}>
+        <span class="brand-mark" aria-hidden="true">
+          k
         </span>
         kimino<span class="brand-period">.</span>
       </button>
-      <p class="brand-caption">조금 더 가까운 대화</p>
-      <Show when={props.state.actor}>
-        <nav class="main-nav" aria-label="메인 메뉴">
+      <p class="brand-caption">{copy.sidebar.caption}</p>
+      <Show when={connected()}>
+        <nav class="main-nav" aria-label={copy.sidebar.nav}>
           <For each={navItems}>
             {(item) => (
               <button
-                class={props.state.view === item.id ? 'nav-item active' : 'nav-item'}
+                class={view() === item.id ? 'nav-item active' : 'nav-item'}
                 onClick={() => props.onNavigate(item.id)}
-                aria-current={props.state.view === item.id ? 'page' : undefined}
+                aria-current={view() === item.id ? 'page' : undefined}
               >
-                <NavGlyph icon={item.icon} />
-                {item.label}
+                <Icon name={item.icon} class="nav-icon" />
+                <span>{item.label}</span>
               </button>
             )}
           </For>
           <Show when={!props.state.demo}>
+            {/* On a phone this is the fifth tab of the bottom bar, so writing is one tap away
+                however far the list has been scrolled. */}
             <button class="primary-button sidebar-compose" onClick={props.onCompose}>
-              새 글 쓰기 <span aria-hidden="true">＋</span>
+              <span>{copy.compose}</span>
+              <Icon name="plus" class="nav-icon" />
             </button>
           </Show>
+          {/* Shown only while the context column (and its profile card) is hidden. */}
+          <button class="nav-item sidebar-disconnect" onClick={props.onDisconnect}>
+            <Icon name="log-out" class="nav-icon" />
+            <span>{disconnectLabel(props.state.demo)}</span>
+          </button>
         </nav>
-        {/* Shown only while the context column (and its profile card) is hidden. */}
-        <button class="text-button sidebar-disconnect" onClick={props.onDisconnect}>
-          {disconnectLabel(props.state.demo)}
+      </Show>
+      <Show when={connected()}>
+        <button
+          type="button"
+          class="sidebar-shortcuts"
+          onClick={props.onShortcuts}
+          aria-haspopup="dialog"
+        >
+          <kbd>?</kbd> {copy.shortcuts.button}
+        </button>
+        {/* Desktop only (hidden below 1100px): two browser settings drawn as switches, so an
+            "on" state is a knob at the far end of its track, never the filled pill that marks
+            the current list above. */}
+        <button
+          type="button"
+          role="switch"
+          class="sidebar-switch sidebar-density"
+          aria-checked={compact() ? 'true' : 'false'}
+          title={copy.density.hint}
+          onClick={() => props.onDensity(compact() ? 'comfortable' : 'compact')}
+        >
+          <Icon name="rows" class="nav-icon" />
+          <span class="switch-label">{copy.density.compact}</span>
+          <span class="switch-track" aria-hidden="true">
+            <span class="switch-knob" />
+          </span>
+        </button>
+        <button
+          type="button"
+          role="switch"
+          class="sidebar-switch sidebar-reveal"
+          aria-checked={props.revealWarned ? 'true' : 'false'}
+          title={copy.density.revealWarnedHint}
+          onClick={() => props.onRevealWarned(!props.revealWarned)}
+        >
+          <Icon name="warning" class="nav-icon" />
+          <span class="switch-label">{copy.density.revealWarned}</span>
+          <span class="switch-track" aria-hidden="true">
+            <span class="switch-knob" />
+          </span>
         </button>
       </Show>
+      {/* Lit only for a connected account: the landing page, the preview and a tab still
+          reconnecting have nothing connected to show green for. */}
       <div class="sidebar-bottom">
-        <span class="connection-dot" /> 시간 순서대로, 광고 없이
+        <span class={connectionDotClass(props.state)} /> {copy.sidebar.foot}
       </div>
     </aside>
   );

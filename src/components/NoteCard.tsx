@@ -1,18 +1,49 @@
 import { createEffect, Show } from 'solid-js';
-import type { ReactionKind, TimelineNote } from '../domain/social';
-import { actorLabel, safeContent, safeHttpUrl } from '../ui/content';
+import type { Actor, ReactionKind, TimelineNote } from '../domain/social';
+import { actorLabelOf, actorName } from '../presentation/actor-name';
+import { safeHttpUrl } from '../presentation/links';
+import { authorHue, isEdited, replyCueText } from '../presentation/note-display';
+import { shareScope } from '../presentation/note-body';
 import { absoluteTime, relativeTime } from '../presentation/time';
-import { useClock } from '../presentation/clock';
+import { copy } from '../presentation/copy';
+import { avatarInitial } from '../presentation/view-flags';
+import Icon from './Icons';
+import { useClock } from '../presentation/solid/clock';
+import NoteActions from './NoteActions';
+import NoteBody from './NoteBody';
 
 export default function NoteCard(props: {
   note: TimelineNote;
   actor?: string;
+  /** The connected account: the one author whose name and username are known. */
+  self?: Actor;
   onReply: (note: TimelineNote) => void;
   onThread?: (note: TimelineNote) => void;
   onOpenParent?: (note: TimelineNote) => void;
+  /** Opens the in-app author sheet; without it the name links to the profile on its server. */
+  onAuthor?: (author: string) => void;
   onReact?: (note: TimelineNote, kind: ReactionKind) => void;
   onSave?: (note: TimelineNote) => void;
-  parentLoaded?: boolean;
+  /** Offered on the reader's own notes only; deleting always goes through a confirmation. */
+  onEdit?: (note: TimelineNote) => void;
+  onDelete?: (note: TimelineNote) => void;
+  confirmingDelete?: boolean;
+  onCancelDelete?: () => void;
+  deleteRef?: (el: HTMLButtonElement) => void;
+  /** The loaded parent, so the reply cue can say whose note this answers and with what words. */
+  parent?: Pick<TimelineNote, 'author' | 'content' | 'summary'>;
+  /** The parent is known to be gone: the cue says so and offers no link to a 410. */
+  parentGone?: boolean;
+  /**
+   * The parent is the card drawn right above this one (a conversation column): the cue
+   * would only repeat what the eye already sees, so it is left off.
+   */
+  parentAdjacent?: boolean;
+  /**
+   * Every loaded note is the reader's own: the "내 글" badge and the handle would repeat the
+   * same fact on every card, so both stay off until someone else's note is loaded.
+   */
+  soloAuthor?: boolean;
   saved?: boolean;
   replies?: number;
   disabled?: boolean;
@@ -23,9 +54,15 @@ export default function NoteCard(props: {
   feedback?: string;
   /** Whether an unsent reply draft exists, so the reply button can point to it. */
   hasDraft?: boolean;
+  /** Roving tab stop for list keyboard navigation: 0 for the current card, -1 for the rest. */
+  tabindex?: number;
+  /** Content-warning reveal held by the view model, so it survives re-reads. */
+  revealed: boolean;
+  onToggleReveal: (id: string) => void;
 }) {
   const now = useClock();
-  const author = () => actorLabel(props.note.author);
+  const name = () => actorName(props.note.author, props.self);
+  const author = () => name().primary;
   let feedbackEl: HTMLElement | undefined;
   // A tap near the bottom edge would otherwise push its own feedback below the fold.
   createEffect(
@@ -34,19 +71,13 @@ export default function NoteCard(props: {
       if (feedback) feedbackEl?.scrollIntoView({ block: 'nearest' });
     },
   );
+  const own = () => !!props.actor && props.note.author === props.actor;
   const permalink = () => safeHttpUrl(props.note.url || props.note.id);
   const parentLink = () => safeHttpUrl(props.note.inReplyTo);
-  const liked = () => !!props.actor && (props.note.likedBy ?? []).includes(props.actor);
-  const shared = () => !!props.actor && (props.note.announcedBy ?? []).includes(props.actor);
-  const likes = () => (props.note.likedBy ?? []).length;
-  const shares = () => (props.note.announcedBy ?? []).length;
-  const withCount = (label: string, count: number) => (count > 0 ? `${label} ${count}` : label);
-  /** Purely presentational: a stable 0..5 palette index derived from the author IRI. */
-  const hue = () => {
-    let hash = 0;
-    for (const char of props.note.author) hash = (hash * 31 + char.charCodeAt(0)) % 6;
-    return hash;
-  };
+  const hue = () => authorHue(props.note.author);
+  /** "author: first words · 원글 보기" once the parent is loaded; the bare marker otherwise. */
+  const parentCue = () =>
+    props.parent ? replyCueText(props.note, props.parent, props.self) : copy.openParent;
   const time = () => (
     <time datetime={props.note.published} title={absoluteTime(props.note.published)}>
       {relativeTime(props.note.published, now())}
@@ -55,43 +86,83 @@ export default function NoteCard(props: {
   return (
     <article
       class={props.focused ? 'note-card note-card--focused' : 'note-card'}
-      aria-label={`${author()}의 글`}
+      aria-label={copy.noteBy(author())}
+      data-note={props.note.id}
+      tabindex={props.tabindex}
     >
       <div class="avatar" data-hue={hue()} aria-hidden="true">
-        {author().slice(0, 1).toUpperCase()}
+        {avatarInitial(author())}
       </div>
       <div class="note-body">
         <Show when={props.note.announcedBy.length}>
-          <p class="note-context">↗ {props.note.announcedBy.map(actorLabel).join(', ')}님이 공유</p>
+          <p class="note-context shared-by">
+            <Icon name="repeat" class="icon--sm" />
+            {copy.sharedBy(
+              props.note.announcedBy.map((id) => actorLabelOf(id, props.self)).join(', '),
+            )}
+          </p>
         </Show>
         <header class="note-header">
-          <a
-            class="author"
-            href={safeHttpUrl(props.note.author)}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Show
+            when={props.onAuthor}
+            fallback={
+              <a
+                class="author"
+                href={safeHttpUrl(props.note.author)}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {author()}
+              </a>
+            }
           >
-            {author()}
-          </a>
+            <button
+              type="button"
+              class="author"
+              aria-label={copy.actor.open(author())}
+              title={copy.actor.open(author())}
+              onClick={() => props.onAuthor?.(props.note.author)}
+            >
+              {author()}
+            </button>
+          </Show>
+          {/* The address, after the name: two people with the same name on different servers
+              stay apart, and a name that is only a username still shows its server. */}
+          <Show when={!props.soloAuthor && name().secondary}>
+            {(handle) => <span class="author-handle">{handle()}</span>}
+          </Show>
+          {/* On a one-person server every handle shares the host; the word says whose note
+              this is without asking the reader to compare IRIs or read a colour - unless
+              every loaded note is mine, when it would say nothing at all. */}
+          <Show when={own() && !props.soloAuthor}>
+            <span class="own-badge" title={copy.own.badgeLabel}>
+              {copy.own.badge}
+            </span>
+          </Show>
           <Show when={permalink()} fallback={<span class="timestamp">{time()}</span>}>
             <a
               class="timestamp"
               href={permalink()}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="원문 보기"
+              aria-label={copy.permalink}
             >
               {time()}
             </a>
           </Show>
         </header>
-        <Show when={props.note.inReplyTo}>
+        <Show when={props.note.inReplyTo && !props.parentAdjacent}>
           <Show
-            when={props.parentLoaded && props.onOpenParent}
+            when={props.parent && props.onOpenParent}
             fallback={
               <Show
-                when={parentLink()}
-                fallback={<span class="note-context reply-context">↳ 답글</span>}
+                when={parentLink() && !props.parentGone}
+                fallback={
+                  <span class="note-context reply-context">
+                    <Icon name="corner-down-right" class="icon--sm" />
+                    {props.parentGone ? copy.parentDeleted : copy.parentUnavailable}
+                  </span>
+                }
               >
                 <a
                   class="note-context reply-context"
@@ -99,7 +170,9 @@ export default function NoteCard(props: {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  ↳ 답글 · 원문 보기 ↗
+                  <Icon name="corner-down-right" class="icon--sm" />
+                  {copy.openParent}
+                  <Icon name="external" class="icon--sm icon--trail" />
                 </a>
               </Show>
             }
@@ -109,85 +182,55 @@ export default function NoteCard(props: {
               class="note-context reply-context reply-context--button"
               onClick={() => props.onOpenParent?.(props.note)}
             >
-              ↳ 답글 · 원글 대화 열기
+              <Icon name="corner-down-right" class="icon--sm" />
+              {parentCue()}
             </button>
           </Show>
         </Show>
-        <div class="note-content" innerHTML={safeContent(props.note.content)} />
-        <Show
-          when={
-            props.note.updated &&
-            Date.parse(props.note.updated) > Date.parse(props.note.published || '')
-          }
-        >
-          <span class="note-context">수정됨</span>
+        <NoteBody
+          note={props.note}
+          revealed={props.revealed}
+          onToggleReveal={props.onToggleReveal}
+        />
+        {/* An edit is dated: "수정됨" alone would not say whether it happened just now or
+            long after the note was read. */}
+        <Show when={isEdited(props.note)}>
+          <span class="note-context note-edited">
+            <Icon name="pencil" class="icon--sm" />
+            {copy.editedAt(relativeTime(props.note.updated, now()))}
+            <time
+              class="sr-only"
+              datetime={props.note.updated}
+              title={absoluteTime(props.note.updated)}
+            >
+              {absoluteTime(props.note.updated)}
+            </time>
+          </span>
         </Show>
-        <footer class="note-actions">
-          <button
-            class="text-button"
-            disabled={props.disabled}
-            onClick={() => props.onReply(props.note)}
-            aria-label={`${author()}에게 답글 달기`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.6"
-              aria-hidden="true"
-            >
-              <path d="M8 9h8M8 13h5M5 19l1-4a8 8 0 1 1 3 3z" />
-            </svg>
-            답글
-            <Show when={props.hasDraft}>
-              <span class="draft-badge">초안 있음</span>
-            </Show>
-          </button>
-          <Show when={props.onReact}>
-            <button
-              class="text-button reaction-button share-button"
-              aria-pressed={shared() ? 'true' : 'false'}
-              aria-busy={props.pending === 'share' ? 'true' : undefined}
-              aria-label={withCount('공유', shares())}
-              disabled={props.disabled}
-              onClick={() => props.onReact?.(props.note, 'share')}
-            >
-              <span aria-hidden="true">↻</span> {withCount('공유', shares())}
-            </button>
-            <button
-              class="text-button reaction-button like-button"
-              aria-pressed={liked() ? 'true' : 'false'}
-              aria-busy={props.pending === 'like' ? 'true' : undefined}
-              aria-label={withCount('좋아요', likes())}
-              disabled={props.disabled}
-              onClick={() => props.onReact?.(props.note, 'like')}
-            >
-              <span aria-hidden="true">{liked() ? '♥' : '♡'}</span> {withCount('좋아요', likes())}
-            </button>
-          </Show>
-          <Show when={props.onSave}>
-            <button
-              class="text-button save-button"
-              aria-pressed={props.saved ? 'true' : 'false'}
-              onClick={() => props.onSave?.(props.note)}
-            >
-              {props.saved ? '저장됨' : '저장'}
-            </button>
-          </Show>
-          <Show when={props.onThread}>
-            <button
-              class="text-button thread-button"
-              data-thread={props.note.id}
-              onClick={() => props.onThread?.(props.note)}
-            >
-              대화 보기
-              <Show when={props.replies}>
-                {' '}
-                <span class="count">답글 {props.replies}</span>
-              </Show>
-            </button>
-          </Show>
-        </footer>
+        {/* What sharing this note would do, said before the control that does it. */}
+        <Show when={shareScope(props.note.visibility)}>
+          {(scope) => <p class="share-scope">{scope()}</p>}
+        </Show>
+        <NoteActions
+          note={props.note}
+          actor={props.actor}
+          author={author()}
+          onReply={props.onReply}
+          onThread={props.onThread}
+          onReact={props.onReact}
+          onSave={props.onSave}
+          saved={props.saved}
+          replies={props.replies}
+          disabled={props.disabled}
+          pending={props.pending}
+          hasDraft={props.hasDraft}
+          own={own()}
+          onEdit={props.onEdit}
+          onDelete={props.onDelete}
+          confirming={props.confirmingDelete}
+          onCancelDelete={props.onCancelDelete}
+          deleteRef={props.deleteRef}
+        />
         <Show when={props.feedback}>
           <p role="alert" class="note-feedback" ref={(el) => (feedbackEl = el)}>
             {props.feedback}

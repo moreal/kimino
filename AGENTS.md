@@ -8,16 +8,25 @@ Do not substitute Mastodon REST endpoints or S2S inbox POSTs for C2S.
 
 - `src/domain/`: canonical models, ActivityStreams normalization and pure evaluation.
 - `src/application/social-session.ts`: framework-independent use cases against
-  `TimelineGateway`; cancellation, request ordering, and global error state.
-- `src/activitypub/client.ts`: HTTP adapter. Existing domain reexports preserve
-  compatibility; do not add business rules back into this layer.
+  `TimelineGateway`; cancellation (`guard.ts`), request ordering, and typed
+  `SessionFailure`/`SessionNotice` state. No user-facing text; gateways signal
+  refusals with the error classes in `gateway-errors.ts` (`toFailure` classifies
+  them). `DEMO_ACTOR` selects the sample gateway.
+- `src/activitypub/client.ts`: HTTP adapter over `domain/`; do not add business
+  rules back into this layer.
 - `src/bootstrap.ts` and `entry-client.tsx`: composition root injecting real/demo
   gateways and preferences into the application view.
-- `src/presentation/`: Solid subscription adapter, feed queries and preference port.
-- `src/app.tsx`, `src/components/`: view state and accessible UI. Never import
-  concrete network/storage adapters here; dependency boundaries have tests.
-- `src/infrastructure/`: browser preferences (IDs only, no drafts/tokens/content)
-  and clearly labeled read-only example content.
+- `src/presentation/`: framework-free view model (`feed-view-model.ts`), pure
+  selectors (`feed-selectors.ts`), tab persistence (`session-restore.ts`),
+  saved-link rules, link/label helpers, all Korean copy (`copy.ts`; failure and
+  notice text in `copy-failures.ts`) and the `Preferences` port. Only
+  `presentation/solid/` may import Solid (store bridge, shared clock, media query).
+- `src/app.tsx`, `src/components/`: accessible UI over the view model. Never import
+  concrete network/storage adapters here (only `infrastructure/sanitize` is
+  allowed) and use `domain`/`application` as types only; dependency boundaries
+  are enforced in `application/architecture.test.ts`.
+- `src/infrastructure/`: DOMPurify sanitizer, browser preferences (IDs only, no
+  drafts/tokens/content) and clearly labeled read-only example content.
 - `compose.yaml`, `dev/`, `scripts/c2s-*`: real ONI fixture and local TLS.
 - `tests/ui.spec.ts`, `tests/product.spec.ts`: isolated browser tests; `tests/c2s.spec.ts`: real Docker E2E.
 - `changes.d/`: Sacho fragments. Add a short user-facing fragment for behavior changes.

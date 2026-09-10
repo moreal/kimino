@@ -1,6 +1,6 @@
 import { createSignal, onSettled } from 'solid-js';
 
-export interface Store<T> {
+interface Store<T> {
   getSnapshot(): T;
   subscribe(listener: (value: T) => void): () => void;
 }
