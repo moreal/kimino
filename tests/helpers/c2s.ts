@@ -228,7 +228,15 @@ export async function pushPastFirstPage(
     });
     expect(response.status()).toBe(201);
     const created = await readObject(request, credentials, response.headers()['location']!);
-    extras.push(objectIri(created.body));
+    const createdObject = objectIri(created.body);
+    extras.push(createdObject);
+    await waitForOutbox(
+      request,
+      credentials,
+      (activity) => activity.type === 'Create' && objectIri(activity) === createdObject,
+      `the Create reaches the outbox before another fixture write: ${createdObject}`,
+      1,
+    );
   }
   const firstPage = await findInOutbox(
     request,

@@ -3386,7 +3386,7 @@ a.reply-context {
   .note-actions .text-button {
     /* Leave a little font-metric headroom: Korean system fonts are wider on Linux than
        the macOS stack, while the inherited min-width still keeps every target at --tap. */
-    padding-inline: calc(var(--s-1) - 1px);
+    padding-inline: 0;
     font-size: var(--t-sm);
     line-height: var(--lh-sm);
   }
