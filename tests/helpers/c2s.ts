@@ -128,6 +128,22 @@ export async function findInOutbox(
   return undefined;
 }
 
+/** Waits until ONI's asynchronous outbox processing makes one activity observable. */
+export async function waitForOutbox(
+  request: APIRequestContext,
+  credentials: Credentials,
+  match: (activity: Record<string, unknown>) => boolean,
+  message: string,
+  pages = 3,
+) {
+  await expect
+    .poll(async () => Boolean(await findInOutbox(request, credentials, match, pages)), {
+      message,
+      timeout: 10000,
+    })
+    .toBe(true);
+}
+
 /** Posts one activity to this actor's outbox the way a second client would; returns the response. */
 export async function postToOutbox(
   request: APIRequestContext,
@@ -154,6 +170,12 @@ export async function deleteElsewhere(
     object: url,
   });
   expect([200, 201, 202, 410]).toContain(response.status());
+  await expect
+    .poll(async () => (await readObject(request, credentials, url)).status, {
+      message: `the deleted object becomes unavailable: ${url}`,
+      timeout: 10000,
+    })
+    .toBe(410);
 }
 
 /** Deletes the notes a test pushed, so they do not pile up as live posts in the fixture. */

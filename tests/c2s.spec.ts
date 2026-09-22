@@ -15,6 +15,7 @@ import {
   readAnonymously,
   readCredentials,
   readObject,
+  waitForOutbox,
 } from './helpers/c2s';
 
 // This suite deliberately fails if the real fixture was not provisioned.
@@ -348,6 +349,12 @@ test('real ONI: editing a note whose Create fell past the first outbox page show
     expect(gets.length, `GETs around the edit: ${gets.join(' ')}`).toBeLessThanOrEqual(4);
     const stored = await readObject(request, credentials, objectUrl);
     expect(String(stored.body.content)).toContain(edited);
+    await waitForOutbox(
+      request,
+      credentials,
+      (activity) => activity.type === 'Update' && objectIri(activity) === objectUrl,
+      'the Update reaches the outbox before cleanup starts',
+    );
   } finally {
     // Tidy up on any outcome: the pushed posts and the note never pile up in the fixture.
     await deleteAll(request, credentials, [...extras, objectUrl]);
@@ -378,6 +385,17 @@ test('real ONI: deleting a note whose Create fell past the first outbox page rem
     await expect(mine).toHaveCount(0);
     // Gone for everyone: an anonymous read of the note answers 410, not the note.
     expect((await readAnonymously(request, objectUrl)).status()).toBe(410);
+    await waitForOutbox(
+      request,
+      credentials,
+      (activity) =>
+        activity.type === 'Create' &&
+        objectIri(activity) === objectUrl &&
+        typeof activity.object === 'object' &&
+        activity.object !== null &&
+        (activity.object as Record<string, unknown>).type === 'Tombstone',
+      'the outbox rewrites the deleted note before cleanup starts',
+    );
   } finally {
     await deleteAll(request, credentials, extras);
   }
