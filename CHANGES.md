@@ -37,6 +37,8 @@ To be released.
  -  Look up a known account by @name@server or enter its exact Actor URL.
     Browser lookup sends no credentials, requires an explicit action, and shows
     the returned address for review before a separate Follow.
+ -  Publish the browser client to GitHub Pages after the complete verification
+    workflow passes on the main branch.
  -  Read conversations with their loaded ancestors and nested replies, using
     a side panel on wide screens or a single-column view on phones. Unfinished
     post and reply drafts stay in the current session while navigating.

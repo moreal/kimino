@@ -2,6 +2,12 @@ name: Check
 on: [push, pull_request]
 permissions:
   contents: read
+
+# Cancel before verification so an older commit cannot deploy after a newer one.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -29,3 +35,30 @@ jobs:
           retention-days: 7
       - run: docker compose down
         if: always()
+
+  deploy-pages:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - id: pages
+        uses: actions/configure-pages@v6
+      - run: npm run build -- --base "${{ steps.pages.outputs.base_path }}/"
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v5
