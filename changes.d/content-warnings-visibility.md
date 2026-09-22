@@ -1,7 +1,5 @@
- -  Posts with a content warning show the warning first and open only on
-    request; attachments are listed with their alt text and images load only
-    when tapped, other media open as external links. Non-public posts carry a
-    visibility indicator.
- -  Write posts with a warning line and choose who sees them: public, quiet
-    (unlisted), followers only, or direct. Replies start at the original post's
-    visibility and can never reach wider than it.
+ -  Write posts with a content warning and choose public, unlisted,
+    followers-only, or direct visibility. Replies are limited to the original
+    post's audience scope and show their conversation recipients before sending.
+ -  Content warnings, non-public audience labels, attachment descriptions, and
+    explicit image loading controls accompany received posts.

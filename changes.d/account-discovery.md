@@ -1,5 +1,3 @@
- -  Find a known person by @name@server before following them. Account lookup
-    sends no token or cookies and requires an explicit action; the returned
-    address is reviewed before a separate Follow. Empty timelines now offer a
-    first-follow entry point. Exact Actor URL entry remains available when a
-    server cannot be queried from the browser.
+ -  Look up a known account by @name@server or enter its exact Actor URL.
+    Browser lookup sends no credentials, requires an explicit action, and shows
+    the returned address for review before a separate Follow.

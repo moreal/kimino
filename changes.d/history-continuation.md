@@ -1,4 +1,3 @@
- -  Large timelines can pause at the read budget and continue on request without
-    restarting earlier pages. Canceling keeps the previous timeline and drafts;
-    incomplete reads are never presented as complete. Read limits are explained
-    separately from malformed server responses.
+ -  Continue large timeline, follow-list, and request-history reads on demand.
+    Canceling preserves existing posts and drafts; incomplete reads are labeled
+    separately from completed reads and server errors.

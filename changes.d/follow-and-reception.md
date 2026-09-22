@@ -1,6 +1,6 @@
- -  Follow accounts from people management or an author profile, inspect pending
-    and accepted requests, and withdraw the original request through C2S.
-    Refresh the timeline to read delivered posts. Failed reads preserve
-    confirmed writes; uncertain requests are never automatically repeated. A
-    separate corrected two-actor ONI fixture verifies follow, reception and
-    withdrawal; existing Mastodon account compatibility remains unsupported.
+ -  Follow accounts and withdraw follows through C2S from people management
+    or author profiles. Search and filter followed people, pending requests,
+    and operations needing attention; refresh the timeline for delivered posts.
+ -  Confirmed writes remain recorded if a subsequent read fails. Failed posts
+    retain their drafts, and uncertain write requests are not retried
+    automatically.
