@@ -176,6 +176,17 @@ export async function deleteElsewhere(
       timeout: 10000,
     })
     .toBe(410);
+  await waitForOutbox(
+    request,
+    credentials,
+    (activity) =>
+      activity.type === 'Create' &&
+      objectIri(activity) === url &&
+      typeof activity.object === 'object' &&
+      activity.object !== null &&
+      (activity.object as Record<string, unknown>).type === 'Tombstone',
+    `the outbox rewrites the deleted object before another cleanup write: ${url}`,
+  );
 }
 
 /** Deletes the notes a test pushed, so they do not pile up as live posts in the fixture. */

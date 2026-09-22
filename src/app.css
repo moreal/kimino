@@ -1951,7 +1951,8 @@ a.reply-context {
   display: none;
 }
 .note-actions .text-button {
-  padding-inline: var(--s-3);
+  /* Keep the seven-control desktop row portable across system-font metrics. */
+  padding-inline: var(--s-2);
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -2801,7 +2802,7 @@ a.reply-context {
     padding-bottom: var(--s-1);
   }
   .note-actions .text-button {
-    padding: var(--s-1) var(--s-2);
+    padding: var(--s-1);
   }
   .composer {
     padding-top: var(--s-4);
