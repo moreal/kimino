@@ -483,11 +483,24 @@ test.describe('round 6: keyboard and desktop layout', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText('대화 열기');
     await expect(dialog.getByRole('button', { name: '닫기' })).toBeFocused();
+    await page
+      .getByRole('button', { name: '타임라인', exact: true })
+      .evaluate((element: HTMLButtonElement) => element.focus());
+    expect(await dialog.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    await page.mouse.click(box!.x + 2, box!.y + 2);
+    await expect(dialog).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
     await page.getByRole('button', { name: '단축키' }).click();
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: '닫기' }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '단축키' })).toBeFocused();
+    await page.getByRole('button', { name: '단축키' }).click();
+    await expect(dialog).toBeVisible();
+    await page.mouse.click(0, 0);
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole('button', { name: '단축키' })).toBeFocused();
   });

@@ -31,6 +31,7 @@ To be released.
     browser; this does not block server delivery or sync to other devices.
  -  Choose a compact desktop reading density and whether content warnings open
     automatically. Both preferences are remembered in this browser.
+ -  Keep keyboard focus inside the shortcut help until it is closed.
  -  Keep note action controls on one row across operating-system font
     differences while preserving their labels and touch target sizes.
  -  Like and share posts, inspect reactions, and withdraw your own reactions

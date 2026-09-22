@@ -1,0 +1,1 @@
+ -  Keep keyboard focus inside the shortcut help until it is closed.
