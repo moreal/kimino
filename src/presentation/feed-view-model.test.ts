@@ -139,6 +139,12 @@ function fakePreferences(
         return [];
       }
     },
+    readMuted(actor) {
+      return JSON.parse(store[`muted.${actor}`] || '[]');
+    },
+    writeMuted(actor, ids) {
+      return this.write(`muted.${actor}`, JSON.stringify(ids));
+    },
     writeSaved(actor, ids) {
       return this.write(`saved.${actor}`, JSON.stringify(ids));
     },
@@ -1279,3 +1285,324 @@ describe('round 14: per-note write state and a refresh that did not land', () =>
     expect(other.vm.getSnapshot().actionError).toEqual({});
   });
 });
+
+describe('local author hiding', () => {
+  const bob = notes[1].author;
+  it('hides every reading projection, preserves saves and drafts, and rejects stale navigation', async () => {
+    const { vm, focus } = await connected();
+    vm.toggleSave(notes[1]);
+    vm.setDraft('n2', 'keep this');
+    vm.chooseReply(notes[1]);
+    vm.openThread(notes[1]);
+    vm.openActor(bob);
+    vm.filterAuthor(bob);
+    vm.hideAuthor(bob);
+    const state = vm.getSnapshot();
+    expect(state.all.map((n) => n.id)).not.toContain('n2');
+    expect(state.byId.has('n2')).toBe(false);
+    expect(state.hiddenNoteIds.has('n2')).toBe(true);
+    expect(state.saved).toEqual(['n2']);
+    expect(state.missingSaved).toEqual([]);
+    expect(state.drafts.n2).toBe('keep this');
+    expect(state.reply).toBeUndefined();
+    expect(state.focusedNoteId).toBeUndefined();
+    expect(state.actorSheet).toBeUndefined();
+    expect(state.authorFilter).toBeUndefined();
+    vm.chooseReply(notes[1]);
+    vm.openThread(notes[1]);
+    expect(vm.getSnapshot().reply).toBeUndefined();
+    expect(vm.getSnapshot().conversation).toBeUndefined();
+    expect(focus.focusHeading).toHaveBeenCalled();
+    vm.navigate('saved');
+    expect(vm.getSnapshot().notes).toEqual([]);
+    vm.unhideAuthor(bob);
+    expect(vm.getSnapshot().notes.map((n) => n.id)).toEqual(['n2']);
+  });
+  it('loads account preferences before the first visible snapshot, excluding self', async () => {
+    const preferences = fakePreferences({ [`muted.${me}`]: JSON.stringify([bob, me, bob]) });
+    const session = fakeSession();
+    const vm = createFeedViewModel(session, preferences, focusPort());
+    const seen: string[][] = [];
+    vm.subscribe((s) => {
+      if (s.timeline) seen.push(s.all.map((n) => n.id));
+    });
+    await vm.connect(me, 'secret');
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((ids) => !ids.includes('n2') && ids.includes('n1'))).toBe(true);
+    expect(vm.getSnapshot().mutedAuthors.map((a) => a.id)).toEqual([bob]);
+    vm.hideAuthor(me);
+    expect(vm.getSnapshot().mutedAuthors.map((a) => a.id)).toEqual([bob]);
+    session.update({ actor: { ...timeline().actor, id: 'https://other.example/me' } });
+    expect(vm.getSnapshot().mutedAuthors).toEqual([]);
+  });
+  it('keeps refused storage changes temporary and previews entirely in memory', async () => {
+    const preferences = fakePreferences({}, false);
+    const { vm } = await connected(fakeSession(), preferences);
+    vm.hideAuthor(bob);
+    expect(vm.getSnapshot().notice).toContain('저장소');
+    expect(vm.getSnapshot().all.map((n) => n.id)).not.toContain('n2');
+    vm.unhideAuthor(bob);
+    expect(vm.getSnapshot().notice).toContain('저장소');
+    const writable = fakePreferences();
+    const demo = createFeedViewModel(fakeSession(), writable, focusPort());
+    await demo.explore();
+    demo.hideAuthor(bob);
+    expect(writable.store).toEqual({});
+    demo.disconnect();
+    await demo.explore();
+    expect(demo.getSnapshot().mutedAuthors).toEqual([]);
+  });
+});
+
+describe('hidden author reconnects', () => {
+  it('does not flash stored hidden notes when reconnecting the same account', async () => {
+    const { vm } = await connected();
+    vm.hideAuthor(notes[1].author);
+    const visible: string[][] = [];
+    vm.subscribe((s) => visible.push(s.all.map((n) => n.id)));
+    await vm.connect(me, 'secret');
+    expect(visible.every((ids) => !ids.includes('n2'))).toBe(true);
+  });
+  it('hydrates an already connected snapshot before returning the view model', () => {
+    const session = fakeSession();
+    session.update({ actor: timeline().actor, timeline: timeline() });
+    const prefs = fakePreferences({ [`muted.${me}`]: JSON.stringify([notes[1].author]) });
+    const vm = createFeedViewModel(session, prefs, focusPort());
+    expect(vm.getSnapshot().all.map((n) => n.id)).not.toContain('n2');
+  });
+});
+
+describe('memory-only image drafts', () => {
+  const image = {
+    dataUrl:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX8kAAAAASUVORK5CYII=',
+    mediaType: 'image/png' as const,
+    bytes: 68,
+    alt: '작은 점',
+  };
+  it('keeps images and alt text across navigation/cancel, retains failures, clears accepted posts', async () => {
+    const publish = vi.fn(async () => {
+      throw new SessionError({ kind: 'unreachable', detail: '' });
+    });
+    const session = fakeSession({ publish });
+    const { vm, preferences } = await connected(session);
+    session.update({ imageUploadEnabled: true });
+    vm.addDraftImage('n2', image);
+    const id = vm.getSnapshot().draftImages.n2[0].id;
+    vm.setImageAlt('n2', id, '읽을 수 있는 설명');
+    vm.chooseReply(notes[1]);
+    vm.dismissReply();
+    vm.navigate('saved');
+    expect(vm.getSnapshot().draftImages.n2[0].alt).toBe('읽을 수 있는 설명');
+    await expect(
+      vm.publish({ content: '그림', visibility: 'public' }, notes[1]),
+    ).rejects.toBeInstanceOf(SessionError);
+    expect(vm.getSnapshot().draftImages.n2).toHaveLength(1);
+    expect(vm.getSnapshot().publishing.size).toBe(0);
+    expect(JSON.stringify(preferences.store)).not.toContain('data:image');
+    publish.mockResolvedValueOnce(undefined as never);
+    await vm.publish({ content: '그림', visibility: 'public' }, notes[1]);
+    expect(publish).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        images: [expect.objectContaining({ id, alt: '읽을 수 있는 설명' })],
+      }),
+      notes[1],
+    );
+    expect(vm.getSnapshot().draftImages.n2).toBeUndefined();
+  });
+  it('owns pending writes across navigation and refuses a second send of the same draft', async () => {
+    let finish!: () => void;
+    const publish = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const discardImage = vi.fn();
+    const session = fakeSession({ publish, discardImage });
+    const { vm } = await connected(session);
+    session.update({ imageUploadEnabled: true });
+    vm.setDraft('new', 'words');
+    vm.setComposeOptions('new', { summary: 'CW', visibility: 'public' });
+    vm.addDraftImage('new', image);
+    const selected = vm.getSnapshot().draftImages.new[0];
+    const writing = vm.publish({ content: 'words', visibility: 'public' });
+    vm.navigate('saved');
+    expect(vm.getSnapshot().publishing.has('new')).toBe(true);
+    await expect(vm.publish({ content: 'words', visibility: 'public' })).rejects.toMatchObject({
+      failure: { kind: 'busy' },
+    });
+    expect(publish).toHaveBeenCalledTimes(1);
+    vm.addDraftImage('new', image);
+    vm.removeDraftImage('new', selected.id);
+    vm.setImageAlt('new', selected.id, 'changed');
+    vm.setDraft('new', 'changed');
+    vm.setComposeOptions('new', { summary: '', visibility: 'unlisted' });
+    expect(vm.getSnapshot().draftImages.new).toEqual([selected]);
+    expect(vm.getSnapshot().drafts.new).toBe('words');
+    expect(discardImage).not.toHaveBeenCalled();
+    finish();
+    await writing;
+    expect(vm.getSnapshot().publishing.size).toBe(0);
+    expect(vm.getSnapshot().drafts.new).toBeUndefined();
+    expect(vm.getSnapshot().draftImages.new).toBeUndefined();
+    expect(vm.getSnapshot().composeOptions.new).toBeUndefined();
+  });
+  it('allows other draft keys and never clears a newer session draft on old completion', async () => {
+    let finish!: () => void;
+    const publish = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const session = fakeSession({ publish });
+    const { vm } = await connected(session);
+    const writing = vm.publish({ content: 'first', visibility: 'public' });
+    await vm.publish({ content: 'reply', visibility: 'public' }, notes[1]);
+    expect(publish).toHaveBeenCalledTimes(2);
+    expect(vm.getSnapshot().publishing.has('new')).toBe(true);
+    vm.disconnect();
+    await vm.connect(me, 'token');
+    vm.setDraft('new', 'new session words');
+    finish();
+    await expect(writing).rejects.toMatchObject({ failure: { kind: 'not-connected' } });
+    expect(vm.getSnapshot().drafts.new).toBe('new session words');
+    expect(vm.getSnapshot().publishing.size).toBe(0);
+  });
+  it('releases a deleted parent reply image only after confirmed deletion', async () => {
+    const discardImage = vi.fn();
+    const deleteNote = vi
+      .fn()
+      .mockRejectedValueOnce(new SessionError({ kind: 'unknown' }))
+      .mockResolvedValue(undefined);
+    const session = fakeSession({ deleteNote, discardImage });
+    const { vm } = await connected(session);
+    session.update({ imageUploadEnabled: true });
+    vm.addDraftImage('n1', image);
+    vm.setDraft('n1', 'reply');
+    vm.setComposeOptions('n1', { summary: 'CW', visibility: 'public' });
+    const id = vm.getSnapshot().draftImages.n1[0].id;
+    await vm.deleteNote(notes[0]);
+    expect(vm.getSnapshot().draftImages.n1).toHaveLength(1);
+    expect(discardImage).not.toHaveBeenCalled();
+    await vm.deleteNote(notes[0]);
+    expect(discardImage).toHaveBeenCalledWith(id);
+    expect(vm.getSnapshot().draftImages.n1).toBeUndefined();
+    expect(vm.getSnapshot().composeOptions.n1).toBeUndefined();
+    expect(vm.getSnapshot().drafts.n1).toBeUndefined();
+  });
+  it('releases reply images when editing discovers the parent is already gone', async () => {
+    const discardImage = vi.fn();
+    const session = fakeSession({
+      discardImage,
+      editNote: vi.fn().mockRejectedValue(new SessionError({ kind: 'note-gone' })),
+    });
+    const { vm } = await connected(session);
+    session.update({ imageUploadEnabled: true });
+    vm.addDraftImage('n1', image);
+    vm.setDraft('n1', 'reply');
+    const id = vm.getSnapshot().draftImages.n1[0].id;
+    vm.startEdit(notes[0]);
+    await expect(
+      vm.submitEdit(notes[0], { content: 'edit', visibility: 'public' }),
+    ).rejects.toMatchObject({ failure: { kind: 'note-gone' } });
+    expect(discardImage).toHaveBeenCalledWith(id);
+    expect(vm.getSnapshot().draftImages.n1).toBeUndefined();
+    expect(vm.getSnapshot().drafts.n1).toBeUndefined();
+    expect(vm.getSnapshot().drafts[editKey('n1')]).toBeUndefined();
+  });
+  it('removes selected images and clears all bytes when the account is disconnected', async () => {
+    const discardImage = vi.fn();
+    const session = fakeSession({ discardImage });
+    const { vm } = await connected(session);
+    session.update({ imageUploadEnabled: true });
+    vm.addDraftImage('new', image);
+    const id = vm.getSnapshot().draftImages.new[0].id;
+    vm.removeDraftImage('new', id);
+    expect(discardImage).toHaveBeenCalledWith(id);
+    expect(vm.getSnapshot().draftImages.new).toEqual([]);
+    vm.addDraftImage('new', image);
+    vm.disconnect();
+    expect(vm.getSnapshot().draftImages).toEqual({});
+  });
+});
+
+describe('account discovery integration', () => {
+  it('only resolves explicit requests in a real connected session and never follows implicitly', async () => {
+    const resolve = vi.fn(async () => ({
+      handle: '@bob@friend.example',
+      actorUrl: 'https://friend.example/bob',
+    }));
+    const follow = vi.fn(async () => undefined);
+    const session = fakeSession({ follow });
+    const vm = createFeedViewModel(session, fakePreferences(), focusPort(), { resolve });
+    vm.setDiscoveryInput('@bob@friend.example');
+    await vm.lookupAccount();
+    expect(resolve).not.toHaveBeenCalled();
+    await vm.explore();
+    vm.setDiscoveryInput('@bob@friend.example');
+    await vm.lookupAccount();
+    expect(resolve).not.toHaveBeenCalled();
+    await vm.connect(me, 'secret');
+    vm.setDiscoveryInput('@bob@friend.example');
+    expect(resolve).not.toHaveBeenCalled();
+    await vm.lookupAccount();
+    expect(vm.getSnapshot().discovery?.result?.actorUrl).toBe('https://friend.example/bob');
+    expect(follow).not.toHaveBeenCalled();
+    vm.dispose();
+  });
+
+  it('a different account aborts lookup and late results cannot enter the new session', async () => {
+    let finish!: (value: { handle: string; actorUrl: string }) => void;
+    let signal!: AbortSignal;
+    const session = fakeSession();
+    const vm = createFeedViewModel(session, fakePreferences(), focusPort(), {
+      resolve: (_handle, passedSignal) => {
+        signal = passedSignal;
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    await vm.connect(me, 'secret');
+    vm.setDiscoveryInput('@bob@friend.example');
+    const pending = vm.lookupAccount();
+    session.update({
+      actor: {
+        id: 'https://other.example/me',
+        inbox: 'https://other.example/inbox',
+        outbox: 'https://other.example/outbox',
+      },
+    });
+    expect(signal.aborted).toBe(true);
+    finish({ handle: '@bob@friend.example', actorUrl: 'https://friend.example/bob' });
+    await pending;
+    expect(vm.getSnapshot().discovery?.result).toBeUndefined();
+    expect(vm.getSnapshot().discovery?.input).toBe('');
+    vm.dispose();
+  });
+});
+
+it.each(['filter', 'hide', 'navigate', 'moderation', 'self'] as const)(
+  'leaving relationship controls through %s cancels their read',
+  async (action) => {
+    const cancelRelationshipReading = vi.fn();
+    const session = fakeSession({ cancelRelationshipReading });
+    const vm = createFeedViewModel(session, fakePreferences(), focusPort());
+    await vm.connect(me, 'memory-only');
+    const other = notes.find((note) => note.author !== me)!.author;
+    vm.openActor(other);
+    cancelRelationshipReading.mockClear();
+    if (action === 'filter') vm.filterAuthor(other);
+    if (action === 'hide') vm.hideAuthor(other);
+    if (action === 'navigate') vm.navigate('all');
+    if (action === 'moderation') vm.openModeration();
+    if (action === 'self') vm.openActor(me);
+    expect(cancelRelationshipReading).toHaveBeenCalledOnce();
+    vm.dispose();
+  },
+);

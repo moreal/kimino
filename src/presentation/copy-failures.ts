@@ -45,6 +45,53 @@ export function failureMessage(failure?: SessionFailure): FailureMessage {
   if (!failure) return { text: '', detail: '' };
   const plain = (text: string): FailureMessage => ({ text, detail: '' });
   switch (failure.kind) {
+    case 'read-limit': {
+      const bound =
+        failure.reason === 'pages' ? `${failure.limit}페이지` : `항목 ${failure.limit}개`;
+      return plain(
+        `클라이언트의 안전한 읽기 한도(${bound})를 넘어 읽기를 멈췄어요. 불완전한 조회 결과는 반영하지 않아요.`,
+      );
+    }
+    case 'relationship-target':
+      return plain(
+        '팔로우할 계정의 ActivityPub 주소를 확인해주세요. 내 계정에는 요청할 수 없어요.',
+      );
+    case 'relationship-state':
+      return plain(
+        '팔로우 상태를 먼저 확인해주세요. 진행 중인 요청이나 정확한 요청 기록을 확인해야 해요.',
+      );
+    case 'relationship-unsupported':
+      return plain(
+        '이 서버에서는 팔로우 목록을 확인할 수 없어요. 서버의 C2S 팔로우 지원을 확인해주세요.',
+      );
+    case 'relationship-uncertain':
+      return plain(
+        '요청 결과를 확인할 수 없어 다시 보내지 않았어요. 상태 확인으로 서버에 반영됐는지 확인해주세요.',
+      );
+    case 'media-unsupported':
+      return plain(
+        '이 연결에서는 이미지 게시를 사용할 수 없어요. ONI 서버라면 연결 옵션에서 이미지 게시를 켜주세요.',
+      );
+    case 'media-invalid':
+      return plain(
+        '이미지 형식·크기 또는 설명을 확인해주세요. PNG·JPEG·WebP 파일을 5MB씩 최대 4장 첨부할 수 있어요.',
+      );
+    case 'media-scope':
+      return plain(
+        '이 서버에서는 이 수신 범위의 이미지 작성을 지원하지 않아요. 글의 공개 범위는 바꾸지 않았어요.',
+      );
+    case 'media-audience':
+      return plain(
+        '이미지를 업로드한 뒤 수신 범위가 바뀌었어요. 이미지를 제거하고 다시 선택해 주세요. 기존 서버 업로드는 삭제되지 않아요.',
+      );
+    case 'media-unresolved':
+      return plain(
+        '이미지는 업로드됐지만 주소를 확인하지 못했어요. 글은 아직 보내지 않았어요. 첨부에 표시된 상태를 확인해주세요.',
+      );
+    case 'media-uncertain':
+      return plain(
+        '이미지 업로드 결과를 확인할 수 없어 다시 전송하지 않았어요. 서버에서 업로드 여부를 확인해주세요. 글은 아직 보내지 않았어요.',
+      );
     case 'not-connected':
       return plain('인스턴스에 먼저 연결해주세요.');
     case 'busy':

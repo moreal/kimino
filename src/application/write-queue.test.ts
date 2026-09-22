@@ -334,6 +334,46 @@ describe('round 13: writes that keep the page responsive', () => {
     expect(session.getSnapshot().refreshing).toBe(false);
   });
 
+  it("forgets an earlier session's owed read when reconnecting directly", async () => {
+    const oldGateway = gateway();
+    const nextGateway = gateway();
+    let active = oldGateway;
+    const session = createSession(() => active);
+    nextGateway.loadTimeline = vi.fn().mockResolvedValue(timeline('https://new.test/me'));
+    await session.connect(credentials);
+    const oldRead = deferred<Timeline>();
+    oldGateway.loadRecent = vi.fn(() => oldRead.promise);
+    await session.publish(post('accepted'));
+    const oldPost = deferred<unknown>();
+    oldGateway.react = () => oldPost.promise;
+    const oldWrite = session.react(note(), 'like', true);
+    active = nextGateway;
+    await session.connect({ actorUrl: 'https://new.test/me' });
+    oldPost.resolve(undefined);
+    await oldWrite;
+    oldRead.resolve(timeline());
+    await session.settled();
+    nextGateway.react = vi.fn().mockRejectedValue(new GatewayRejected(422));
+    await expect(session.react(note(), 'like', true)).rejects.toMatchObject({
+      failure: { kind: 'http', status: 422 },
+    });
+    expect(nextGateway.loadRecent).not.toHaveBeenCalled();
+    expect(nextGateway.loadTimeline).toHaveBeenCalledTimes(1);
+    expect(session.getSnapshot().refreshing).toBe(false);
+  });
+
+  it('rejects a disconnected withdrawal with a typed failure and sends nothing', async () => {
+    const active = gateway();
+    const session = await connected(active);
+    session.disconnect();
+    let withdrawal: Promise<void> | undefined;
+    expect(() => {
+      withdrawal = session.react(note(), 'like', false);
+    }).not.toThrow();
+    await expect(withdrawal).rejects.toMatchObject({ failure: { kind: 'not-connected' } });
+    expect(active.withdrawReaction).not.toHaveBeenCalled();
+  });
+
   it('drops the confirmation when the read after an on-write notice fails', async () => {
     const active = gateway();
     const session = await connected(active);

@@ -633,8 +633,10 @@ describe('round 11: a card that outlived its object', () => {
     const reloadFailedAfter = async (run: () => Promise<unknown>) => {
       active.loadTimeline = async () => timeline();
       await run().catch(() => undefined);
+      await session.settled();
       active.loadTimeline = offline;
       await run().catch(() => undefined);
+      await session.settled();
       return session.getSnapshot().error;
     };
     const liked = note({

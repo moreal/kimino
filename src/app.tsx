@@ -1,3 +1,4 @@
+import type { AccountDiscoveryGateway } from './application/account-discovery';
 import { createSignal, Show, untrack } from 'solid-js';
 import type { TimelineNote } from './domain/social';
 import type { SocialSession } from './application/social-session';
@@ -12,12 +13,14 @@ import { createFeedViewModel, type FocusPort } from './presentation/feed-view-mo
 import { threadPlacement } from './presentation/feed-selectors';
 import { useStore } from './presentation/solid/use-store';
 import { useMediaQuery } from './presentation/solid/media';
+import { ImageReadContext } from './presentation/solid/image-read-context';
 import { RevealWarnedContext } from './presentation/solid/reveal-preference';
 import { copy, disconnectLabel } from './presentation/copy';
 import { WIDE_QUERY } from './presentation/design-tokens';
 import { actorSheetIsSelf } from './presentation/view-flags';
 import Icon from './components/Icons';
 import ConnectionPanel from './components/ConnectionPanel';
+import ReadContinuation from './components/ReadContinuation';
 import CompatibilityNote from './components/CompatibilityNote';
 import Sidebar from './components/Sidebar';
 import PageHeader from './components/PageHeader';
@@ -26,6 +29,10 @@ import ConversationView from './components/ConversationView';
 import ContextColumn from './components/ContextColumn';
 import ShortcutsDialog from './components/ShortcutsDialog';
 import ActorSheet from './components/ActorSheet';
+import HiddenAuthorsDialog from './components/HiddenAuthorsDialog';
+import PeopleDialog from './components/PeopleDialog';
+import RelationshipControl from './components/RelationshipControl';
+import RelationshipReadContinuation from './components/RelationshipReadContinuation';
 import Toast from './components/Toast';
 import { inComposer, isEditable } from './components/shortcuts';
 
@@ -117,11 +124,17 @@ export default function App(props: {
   preferences: Preferences;
   /** Opt-in tab-scoped persistence; omitted means the token is memory-only. */
   sessionStore?: SessionStore;
+  accountDiscovery?: AccountDiscoveryGateway;
 }) {
   const session = untrack(() => props.session);
   const preferences = untrack(() => props.preferences);
   const store = untrack(() => props.sessionStore) ?? noSessionStore;
-  const vm = createFeedViewModel(session, preferences, focusPort);
+  const vm = createFeedViewModel(
+    session,
+    preferences,
+    focusPort,
+    untrack(() => props.accountDiscovery),
+  );
   const persistence = createPersistence(vm, store);
   const wide = useMediaQuery(WIDE_QUERY);
   /** The view model with the actions that also touch the tab record routed through persistence. */
@@ -186,112 +199,193 @@ export default function App(props: {
     </Show>
   );
   return (
-    <RevealWarnedContext value={revealWarned}>
-      <div
-        class={connected() ? 'app-shell' : 'app-shell app-shell--landing'}
-        data-density={state().density}
-      >
-        <a
-          href={SKIP_TARGETS[placement().skipTarget]}
-          class="skip-link"
-          onClick={(event) => {
-            const target = document.querySelector<HTMLElement>(
-              SKIP_TARGETS[placement().skipTarget],
-            );
-            if (!target) return;
-            event.preventDefault();
-            target.focus({ preventScroll: false });
-          }}
+    <ImageReadContext
+      value={{
+        enabled: () => state().imageReadEnabled,
+        identity: () => state().actor,
+        load: vm.loadImage,
+      }}
+    >
+      <RevealWarnedContext value={revealWarned}>
+        <div
+          class={connected() ? 'app-shell' : 'app-shell app-shell--landing'}
+          data-density={state().density}
         >
-          {copy.skipLink}
-        </a>
-        <Sidebar
-          state={state()}
-          onNavigate={shell.navigate}
-          onCompose={shell.compose}
-          onDisconnect={shell.disconnect}
-          onShortcuts={shell.toggleHelp}
-          onDensity={shell.setDensity}
-          revealWarned={revealWarned()}
-          onRevealWarned={shell.setRevealWarned}
-          pendingAccount={pendingAccount()}
-        />
-        <main id="main-content" class="main-column" tabindex={-1} onKeyDown={onMainKeyDown}>
+          <a
+            href={SKIP_TARGETS[placement().skipTarget]}
+            class="skip-link"
+            onClick={(event) => {
+              const target = document.querySelector<HTMLElement>(
+                SKIP_TARGETS[placement().skipTarget],
+              );
+              if (!target) return;
+              event.preventDefault();
+              target.focus({ preventScroll: false });
+            }}
+          >
+            {copy.skipLink}
+          </a>
+          <Sidebar
+            state={state()}
+            onNavigate={shell.navigate}
+            onCompose={shell.compose}
+            onDisconnect={shell.disconnect}
+            onShortcuts={shell.toggleHelp}
+            onDensity={shell.setDensity}
+            revealWarned={revealWarned()}
+            onRevealWarned={shell.setRevealWarned}
+            pendingAccount={pendingAccount()}
+          />
+          <main id="main-content" class="main-column" tabindex={-1} onKeyDown={onMainKeyDown}>
+            <Show when={state().readBudget}>
+              {(progress) => (
+                <ReadContinuation
+                  progress={progress()}
+                  refreshing={!!state().actor}
+                  onContinue={shell.continueReading}
+                  onCancel={shell.cancelReading}
+                />
+              )}
+            </Show>
+            <Show
+              when={connected()}
+              fallback={
+                <ConnectionPanel
+                  initialUrl={untrack(() => preferences.read('actor')) || ''}
+                  busy={state().connecting}
+                  error={state().error}
+                  errorDetail={state().errorDetail}
+                  onConnect={(url, token, remember, mediaMode) =>
+                    void connect(url, token, remember, mediaMode)
+                  }
+                  onExplore={() => void shell.explore()}
+                />
+              }
+            >
+              <PageHeader
+                state={state()}
+                title={placement().title}
+                listVisible={placement().listVisible}
+                threadAside={placement().aside}
+                onRefresh={() => void shell.refresh()}
+                onConnectAccount={shell.disconnect}
+                onDismissError={shell.dismissError}
+                onQuery={shell.setQuery}
+                onClearFilter={shell.clearAuthorFilter}
+                onManageHidden={shell.openModeration}
+                onPeople={shell.openPeople}
+                onAccount={() => {
+                  const id = state().actor?.id;
+                  if (id) shell.openActor(id);
+                }}
+              />
+              <Show when={!wide()}>{toast()}</Show>
+              <Show when={placement().listVisible} fallback={conversation(false)}>
+                <FeedList
+                  state={state()}
+                  vm={shell}
+                  onThread={openThread}
+                  replyElsewhere={(id) => placement().inConversation.has(id)}
+                  sessionHint={!wide()}
+                />
+              </Show>
+            </Show>
+          </main>
           <Show
             when={connected()}
             fallback={
-              <ConnectionPanel
-                initialUrl={untrack(() => preferences.read('actor')) || ''}
-                busy={state().connecting}
-                error={state().error}
-                errorDetail={state().errorDetail}
-                onConnect={(url, token, remember) => void connect(url, token, remember)}
-                onExplore={() => void shell.explore()}
-              />
+              <aside class="context-column landing-aside">
+                <CompatibilityNote />
+              </aside>
             }
           >
-            <PageHeader
+            <ContextColumn
               state={state()}
-              title={placement().title}
-              listVisible={placement().listVisible}
-              threadAside={placement().aside}
-              onRefresh={() => void shell.refresh()}
-              onConnectAccount={shell.disconnect}
-              onDismissError={shell.dismissError}
-              onQuery={shell.setQuery}
-              onClearFilter={shell.clearAuthorFilter}
-              onAccount={() => {
-                const id = state().actor?.id;
-                if (id) shell.openActor(id);
-              }}
+              onDisconnect={shell.disconnect}
+              onThread={openThread}
+              sessionHint={wide()}
+              onDismissHint={shell.dismissSessionHint}
+              pendingAccount={pendingAccount()}
+              toast={wide() ? toast() : undefined}
+              thread={
+                placement().aside ? (
+                  <>
+                    {conversation(true)}
+                    {missingSelection()}
+                  </>
+                ) : undefined
+              }
             />
-            <Show when={!wide()}>{toast()}</Show>
-            <Show when={placement().listVisible} fallback={conversation(false)}>
-              <FeedList
-                state={state()}
-                vm={shell}
-                onThread={openThread}
-                replyElsewhere={(id) => placement().inConversation.has(id)}
-                sessionHint={!wide()}
-              />
-            </Show>
           </Show>
-        </main>
-        <Show
-          when={connected()}
-          fallback={
-            <aside class="context-column landing-aside">
-              <CompatibilityNote />
-            </aside>
-          }
-        >
-          <ContextColumn
-            state={state()}
-            onDisconnect={shell.disconnect}
-            onThread={openThread}
-            sessionHint={wide()}
-            onDismissHint={shell.dismissSessionHint}
-            pendingAccount={pendingAccount()}
-            toast={wide() ? toast() : undefined}
-            thread={
-              placement().aside ? (
+          <Show when={connected()}>
+            <PeopleDialog
+              open={state().peopleOpen}
+              actor={state().actor?.id}
+              demo={state().demo}
+              state={state().relationships}
+              profiles={state().peopleProfiles}
+              discovery={state().discovery}
+              onDiscoveryInput={shell.setDiscoveryInput}
+              onDiscover={shell.lookupAccount}
+              onTimeline={async () => {
+                shell.closePeople();
+                shell.navigate('all');
+                await shell.refresh();
+              }}
+              onContinueReading={shell.continueRelationshipReading}
+              onCancelReading={shell.cancelRelationshipReading}
+              onClose={shell.closePeople}
+              onRefresh={shell.loadRelationships}
+              onFollow={shell.follow}
+              onUnfollow={shell.unfollow}
+            />
+          </Show>
+          <HiddenAuthorsDialog
+            open={state().moderationOpen}
+            authors={state().mutedAuthors}
+            demo={state().demo}
+            onClose={shell.closeModeration}
+            onRestore={shell.unhideAuthor}
+          />
+          <ShortcutsDialog open={state().helpOpen} onClose={shell.closeHelp} />
+          <ActorSheet
+            relationship={
+              state().actorSheet && !actorSheetIsSelf(state()) ? (
                 <>
-                  {conversation(true)}
-                  {missingSelection()}
+                  <Show when={state().relationships?.readBudget}>
+                    {(progress) => (
+                      <RelationshipReadContinuation
+                        progress={progress()}
+                        purpose={state().relationships?.readPurpose}
+                        target={state().relationships?.readTarget}
+                        onContinue={shell.continueRelationshipReading}
+                        onCancel={shell.cancelRelationshipReading}
+                      />
+                    )}
+                  </Show>
+                  <RelationshipControl
+                    target={state().actorSheet!.id}
+                    state={state().relationships}
+                    self={state().actor?.id}
+                    demo={state().demo}
+                    onFollow={shell.follow}
+                    onUnfollow={shell.unfollow}
+                    onRefresh={shell.loadRelationships}
+                  />
                 </>
               ) : undefined
             }
+            onPeople={shell.openPeople}
+            profile={state().actorSheet}
+            onClose={shell.closeActor}
+            onFilter={shell.filterAuthor}
+            onHide={actorSheetIsSelf(state()) ? undefined : shell.hideAuthor}
+            demo={state().demo}
+            onDisconnect={actorSheetIsSelf(state()) ? shell.disconnect : undefined}
+            disconnectLabel={disconnectLabel(state().demo)}
           />
-        </Show>
-        <ShortcutsDialog open={state().helpOpen} onClose={shell.closeHelp} />
-        <ActorSheet
-          profile={state().actorSheet}
-          onClose={shell.closeActor}
-          onFilter={shell.filterAuthor}
-          onDisconnect={actorSheetIsSelf(state()) ? shell.disconnect : undefined}
-          disconnectLabel={disconnectLabel(state().demo)}
-        />
-      </div>
-    </RevealWarnedContext>
+        </div>
+      </RevealWarnedContext>
+    </ImageReadContext>
   );
 }

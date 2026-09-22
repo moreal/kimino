@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
 import {
   WALK,
+  finishInitialRead,
   connect,
+  enterToken,
   deleteAll,
   deleteElsewhere,
   findInOutbox,
@@ -19,7 +21,8 @@ import {
 // `npm run test:e2e:ui` runs the isolated UI tests without Docker. Each test asserts what the
 // real server stored or answered; the layout around those writes is covered in tests/ui.spec.ts
 // and tests/writes.spec.ts against a mock server.
-test.use({ ignoreHTTPSErrors: true });
+// Never retain bearer-bearing browser/API traffic or credential-entry screenshots.
+test.use({ ignoreHTTPSErrors: true, trace: 'off', screenshot: 'off', video: 'off' });
 // A test connects once or twice and may push, edit and delete dozens of posts around that
 // walk; the default 30s budget is the walk allowance alone, so it is raised here.
 test.setTimeout(120000);
@@ -378,4 +381,93 @@ test('real ONI: deleting a note whose Create fell past the first outbox page rem
   } finally {
     await deleteAll(request, credentials, extras);
   }
+});
+
+test('real ONI: images preserve bytes and alt text, and remain unloaded until requested', async ({
+  page,
+  request,
+}) => {
+  const credentials = readCredentials();
+  await page.goto('/');
+  await page.getByLabel('Actor URL').fill(credentials.actorUrl);
+  await enterToken(page, credentials.token);
+  await page.getByText('이미지 게시 설정', { exact: true }).click();
+  await page.getByLabel('ONI 이미지 게시 사용', { exact: true }).check();
+  await page.getByRole('button', { name: '연결하기', exact: true }).click();
+  await finishInitialRead(page, page.getByLabel('새 글', { exact: true }));
+  const rejectedCount = async () => {
+    const text = (await page.locator('.feed-status-refused').allTextContents()).join(' ');
+    return Number(text?.match(/활동 (\d+)개를 제외/)?.[1] ?? 0);
+  };
+  const rejectedBefore = await rejectedCount();
+  // Generated, non-sensitive test pixels exercise all advertised formats.
+  const sources = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 2;
+    canvas.height = 2;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#2f5a3a';
+    context.fillRect(0, 0, 2, 2);
+    return ['image/png', 'image/jpeg', 'image/webp'].map((type) => ({
+      type,
+      data: canvas.toDataURL(type).split(',')[1],
+    }));
+  });
+  await page.getByLabel('새 글', { exact: true }).fill(`이미지 세 형식 확인 ${Date.now()}`);
+  const message = await page.getByLabel('새 글', { exact: true }).inputValue();
+  await page.locator('.main-composer input[type=file]').setInputFiles(
+    sources.map((source, i) => ({
+      name: `pixel-${i}`,
+      mimeType: source.type,
+      buffer: Buffer.from(source.data, 'base64'),
+    })),
+  );
+  const alts = ['초록 점 PNG', '초록 점 JPEG', '초록 점 WebP'];
+  for (const [index, alt] of alts.entries())
+    await page.getByLabel(`이미지 ${index + 1} 대체 텍스트`).fill(alt);
+  let remoteImages = 0;
+  page.on('request', (req) => {
+    if (req.resourceType() === 'image' && req.url().startsWith(credentials.actorUrl))
+      remoteImages++;
+  });
+  await page.getByRole('button', { name: '게시하기', exact: true }).click();
+  const card = page.locator('.note-card', { hasText: message });
+  await expect(card).toBeVisible({ timeout: WALK });
+  expect(remoteImages).toBe(0);
+  expect(await rejectedCount()).toBe(rejectedBefore);
+  await expect(card.locator('.attachment-alt')).toHaveText(alts);
+  const noteUrl = (await card.locator('a.timestamp').getAttribute('href'))!;
+  const stored = await readObject(request, credentials, noteUrl);
+  const attachments = stored.body.attachment as { url: string; name: string; mediaType: string }[];
+  expect(attachments.map((a) => a.name)).toEqual(alts);
+  for (const [index, attachment] of attachments.entries()) {
+    const response = await request.get(attachment.url, {
+      headers: { Accept: attachment.mediaType },
+      ignoreHTTPSErrors: true,
+    });
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain(sources[index].type);
+    expect((await response.body()).equals(Buffer.from(sources[index].data, 'base64'))).toBe(true);
+  }
+  await card.getByRole('button', { name: '이미지 불러오기' }).first().click();
+  await expect(card.locator('img.attachment-image')).toBeVisible();
+  await expect
+    .poll(() =>
+      card.locator('img.attachment-image').evaluate((el: HTMLImageElement) => el.naturalWidth),
+    )
+    .toBe(2);
+  expect(remoteImages).toBe(1);
+  // A photo-only post is a real Note too; do not lose it just because content is empty.
+  await page.getByLabel('새 글', { exact: true }).focus();
+  await page.locator('.main-composer input[type=file]').setInputFiles({
+    name: 'only.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(sources[0].data, 'base64'),
+  });
+  const imageOnlyAlt = `이미지만 게시 ${Date.now()}`;
+  await page.getByLabel('이미지 1 대체 텍스트').fill(imageOnlyAlt);
+  await page.getByRole('button', { name: '게시하기', exact: true }).click();
+  await expect(page.locator('.note-card .attachment-alt', { hasText: imageOnlyAlt })).toBeVisible({
+    timeout: WALK,
+  });
 });

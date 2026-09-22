@@ -1,11 +1,17 @@
-import { createEffect, createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Actor, ComposeVisibility, NoteDraft, TimelineNote } from '../domain/social';
 import { safeContent } from '../infrastructure/sanitize';
 import { contentCopy, copy, joinLine } from '../presentation/copy';
 import type { FailureMessage } from '../presentation/copy-failures';
 import type { ComposeOptions } from '../presentation/feed-selectors';
+import type { ImageDraft } from '../domain/images';
+import type { ImageUploadState } from '../application/image-types';
+import ImagePicker from './ImagePicker';
+import { mediaCopy } from '../presentation/copy-media';
 import { NOTE_LIMITS } from '../presentation/design-tokens';
 import { actorLabelOf } from '../presentation/actor-name';
+import { replyAudience, composerAudienceDescription } from '../presentation/reply-audience';
+import { replyAudienceCopy } from '../presentation/copy-content';
 import {
   effectiveReplyVisibility,
   hasContentWarning,
@@ -47,6 +53,14 @@ export default function Composer(props: {
   /** The failure of this composer's last publish, owned by the feed view model. */
   error?: FailureMessage;
   disabled?: boolean;
+  images?: readonly ImageDraft[];
+  uploads?: Readonly<Record<string, ImageUploadState>>;
+  imageUploadEnabled?: boolean;
+  privateImageUploadEnabled?: boolean;
+  onAddImage?: (image: Omit<ImageDraft, 'id'>) => void;
+  onRemoveImage?: (id: string) => void;
+  onImageAlt?: (id: string, alt: string) => void;
+  onResolveImage?: (id: string) => Promise<void>;
 }) {
   const [localText, setLocalText] = createSignal('');
   const text = () => props.draft ?? localText();
@@ -73,10 +87,31 @@ export default function Composer(props: {
   // A persisted or stale choice wider than the parent is narrowed by the domain rule.
   const visibility = (): ComposeVisibility =>
     effectiveReplyVisibility(options().visibility, props.replyTo);
+  const audience = () =>
+    props.replyTo && !props.editing ? replyAudience(props.replyTo, props.self?.id) : undefined;
   /** The parent's own content warning stays closed in the preview until the writer opens it. */
   const [parentOpen, setParentOpen] = createSignal(false);
   const [warning, setWarning] = createSignal(false);
   const warningOpen = () => warning() || options().summary.length > 0;
+  let form: HTMLFormElement | undefined;
+  let resizeFrame: number | undefined;
+  // A viewport can shrink after the form opens. Keep only this form's current
+  // control visible; an unfocused draft must never pull the reader away.
+  const keepFocusVisible = () => {
+    const focused = document.activeElement;
+    if (!(focused instanceof HTMLElement) || !form?.contains(focused)) return;
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = undefined;
+      if (focused.isConnected && document.activeElement === focused)
+        focused.scrollIntoView({ block: 'nearest' });
+    });
+  };
+  window.addEventListener('resize', keepFocusVisible);
+  onCleanup(() => {
+    window.removeEventListener('resize', keepFocusVisible);
+    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+  });
   let warningInput: HTMLInputElement | undefined;
   const toggleWarning = () => {
     const opening = !warningOpen();
@@ -91,7 +126,8 @@ export default function Composer(props: {
    * writer taps next (an option, a card button) away before the click lands.
    */
   const [expanded, setExpanded] = createSignal(false);
-  const collapsed = () => !expanded() && !text() && !options().summary;
+  const collapsed = () => !expanded() && !text() && !options().summary && !props.images?.length;
+  const [readingImage, setReadingImage] = createSignal(false);
   const [pending, setPending] = createSignal(false);
   /** Past the ceiling the publish is refused here, before a request the server would reject. */
   const over = () => text().length > LIMIT;
@@ -99,7 +135,14 @@ export default function Composer(props: {
   async function submit(event?: Event) {
     event?.preventDefault();
     const draft = text().trim();
-    if (!draft || over() || submitting || props.disabled) return;
+    if (
+      (!draft && !props.images?.length) ||
+      over() ||
+      submitting ||
+      props.disabled ||
+      readingImage()
+    )
+      return;
     submitting = true;
     setPending(true);
     try {
@@ -148,6 +191,19 @@ export default function Composer(props: {
       class={collapsed() ? 'composer composer--collapsed' : 'composer'}
       onSubmit={submit}
       onKeyDown={onKeyDown}
+      ref={(el) => {
+        form = el;
+        if (!props.replyTo && !props.editing) return;
+        queueMicrotask(() =>
+          requestAnimationFrame(() => {
+            if (!el.isConnected) return;
+            // Reveal the whole form when it fits. On a short viewport, the writing
+            // position wins over the footer; never scroll the focused caret away.
+            el.scrollIntoView({ block: 'nearest' });
+            el.querySelector('textarea')?.scrollIntoView({ block: 'nearest' });
+          }),
+        );
+      }}
     >
       <Show when={props.editing}>
         <div class="reply-heading">
@@ -283,25 +339,51 @@ export default function Composer(props: {
       <Show when={limits().hint}>
         <p class="visibility-limit">{limits().hint}</p>
       </Show>
-      <Show when={!collapsed()}>
-        <p class="compose-scope">{contentCopy.noAttachments}</p>
+      <Show when={!props.editing} fallback={<p class="compose-scope">{mediaCopy.editPreserved}</p>}>
+        <ImagePicker
+          images={props.images ?? []}
+          uploads={props.uploads ?? {}}
+          enabled={!!props.imageUploadEnabled}
+          privateEnabled={!!props.privateImageUploadEnabled}
+          visibility={visibility()}
+          busy={!!busy()}
+          onAdd={(image) => props.onAddImage?.(image)}
+          onRemove={(id) => props.onRemoveImage?.(id)}
+          onAlt={(id, alt) => props.onImageAlt?.(id, alt)}
+          onResolve={(id) => props.onResolveImage?.(id) ?? Promise.resolve()}
+          onReading={setReadingImage}
+        />
       </Show>
-      {/* A reply or edit composer opens where its card is, which can be low in the window:
-          its submit row is brought into view once it is laid out, moving as little as
-          possible, so 게시하기 is never just below the fold of the card that opened it. */}
-      <footer
-        class="composer-footer"
-        ref={(el) => {
-          if (!props.replyTo && !props.editing) return;
-          queueMicrotask(() =>
-            requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest' })),
-          );
-        }}
-      >
+      <Show when={audience()}>
+        {(recipients) => (
+          <div class="reply-audience compose-scope">
+            <strong>{replyAudienceCopy.heading}</strong>
+            <Show when={recipients().available} fallback={<p>{replyAudienceCopy.unavailable}</p>}>
+              <Show
+                when={recipients().recipients.length}
+                fallback={<p>{replyAudienceCopy.empty}</p>}
+              >
+                <ul aria-label={replyAudienceCopy.heading}>
+                  <For each={recipients().recipients}>
+                    {(recipient) => (
+                      <li>
+                        <span>{recipient.label}</span> <span>{recipient.id}</span>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </Show>
+            </Show>
+          </div>
+        )}
+      </Show>
+      <footer class="composer-footer">
         <Show when={!props.editing}>
           <span class="visibility">
             {visibilityInfo(visibility()).label}{' '}
-            <span class="visibility-hint">· {visibilityInfo(visibility()).description}</span>
+            <span class="visibility-hint">
+              · {composerAudienceDescription(visibility(), audience())}
+            </span>
           </span>
         </Show>
         <div class="compose-controls">
@@ -317,7 +399,9 @@ export default function Composer(props: {
           <button
             class="primary-button"
             type="submit"
-            disabled={busy() || over() || !text().trim()}
+            disabled={
+              busy() || readingImage() || over() || (!text().trim() && !props.images?.length)
+            }
           >
             {props.editing
               ? pending()

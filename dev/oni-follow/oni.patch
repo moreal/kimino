@@ -1,0 +1,1876 @@
+--- a/handlers.go
++++ b/handlers.go
+@@ -8,8 +8,10 @@
+ 	"fmt"
+ 	"html/template"
+ 	"io"
++	"mime"
+ 	"net/http"
+ 	"net/url"
++	"os"
+ 	"path/filepath"
+ 	"slices"
+ 	"strings"
+@@ -441,31 +443,25 @@
+ 	return writeResponse(dat, it.GetType(), updatedAt, client.ContentTypeJsonLD, eTag)
+ }
+ 
++func preventResourceCaching(w http.ResponseWriter) {
++	w.Header().Set("Cache-Control", "private, no-store")
++	w.Header().Set("Vary", "Accept")
++	w.Header().Del("ETag")
++	w.Header().Del("Last-Modified")
++}
++
+ func writeResponse(raw []byte, typ vocab.Typer, updatedAt time.Time, contentType string, eTag string) http.HandlerFunc {
+ 	return func(w http.ResponseWriter, r *http.Request) {
+-		if vocab.ActivityTypes.Match(typ) {
+-			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, immutable", int(activityCacheDuration.Seconds())))
+-		} else {
+-			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(objectCacheDuration.Seconds())))
+-		}
+-		w.Header().Set("Vary", "Accept")
+-		if !updatedAt.IsZero() {
+-			w.Header().Set("Last-Modified", updatedAt.Format(time.RFC1123))
+-		}
++		// Dynamic resource representations may contain audience-specific data.
++		// Never reuse validators or permit shared/private cache storage here.
++		preventResourceCaching(w)
+ 		w.Header().Set("Content-Type", contentType)
+-		w.Header().Set("ETag", eTag)
+ 		status := http.StatusOK
+-		uaHasItem := requestMatchesETag(r.Header, eTag) || requestMatchesLastModified(r.Header, updatedAt)
+-		if uaHasItem {
+-			status = http.StatusNotModified
+-		} else {
+-			if typ == vocab.TombstoneType {
+-				status = http.StatusGone
+-			}
+-		}
+-
++		if typ == vocab.TombstoneType {
++			status = http.StatusGone
++		}
+ 		w.WriteHeader(status)
+-		if r.Method == http.MethodGet && !uaHasItem {
++		if r.Method == http.MethodGet {
+ 			_, _ = w.Write(raw)
+ 		}
+ 	}
+@@ -710,32 +706,7 @@
+ 			return
+ 		}
+ 
+-		eTag := fmt.Sprintf(`"%2x"`, md5.Sum(wrt.Bytes()))
+-		if vocab.ActivityTypes.Match(it.GetType()) {
+-			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d, immutable", int(activityCacheDuration.Seconds())))
+-		} else {
+-			w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(objectCacheDuration.Seconds())))
+-		}
+-		w.Header().Set("Vary", "Accept")
+-		w.Header().Set("ETag", eTag)
+-		if !updatedAt.IsZero() {
+-			w.Header().Set("Last-Modified", updatedAt.Format(time.RFC1123))
+-		}
+-
+-		status := http.StatusOK
+-		uaHasItem := requestMatchesETag(r.Header, eTag) || requestMatchesLastModified(r.Header, updatedAt)
+-		if uaHasItem {
+-			status = http.StatusNotModified
+-		} else {
+-			if it.GetType() == vocab.TombstoneType {
+-				status = http.StatusGone
+-			}
+-		}
+-
+-		w.WriteHeader(status)
+-		if r.Method == http.MethodGet && !uaHasItem {
+-			_, _ = io.Copy(w, &wrt)
+-		}
++		writeResponse(wrt.Bytes(), it.GetType(), updatedAt, "text/html; charset=utf-8", "").ServeHTTP(w, r)
+ 	}
+ }
+ 
+@@ -859,7 +830,7 @@
+ func (o *oni) ActivityPubItem(w http.ResponseWriter, r *http.Request) {
+ 	iri := irif(r)
+ 
+-	authActor, _ := o.loadAuthorizedActor(r, o.oniActor(r))
++	authActor, authErr := o.loadAuthorizedActor(r, o.oniActor(r))
+ 
+ 	colFilters := make(filters.Checks, 0)
+ 	if vocab.ValidCollectionIRI(iri) {
+@@ -884,7 +855,10 @@
+ 				colFilters = append(colFilters, filters.Actor(filters.NotNilItem))
+ 			}
+ 		}
+-		if vocab.ValidObjectCollection(whichCollection) {
++		if whichCollection == vocab.Following || whichCollection == vocab.Followers {
++			// Probe-only: graph members are actors, not content objects.
++			colFilters = append(colFilters, filters.HasType(vocab.ActorTypes...))
++		} else if vocab.ValidObjectCollection(whichCollection) {
+ 			colFilters = append(colFilters, filters.NilInReplyTo)
+ 			colFilters = append(colFilters, filters.HasType(validObjectTypes...))
+ 		}
+@@ -897,9 +871,7 @@
+ 		// NOTE(marius): this extracts the IRI corresponding to the current collection from the authorized actor
+ 		//  and if it matches the current requested IRI, we consider the authorized actor as a-priori valid,
+ 		//  no need for extra checks.
+-		if col := whichCollection.IRI(authActor); !col.Equal(iri) {
+-			colFilters = append(colFilters, filters.Authorized(authActor.ID))
+-		}
++		colFilters = append(colFilters, collectionAuthorizationChecks(whichCollection.IRI(authActor), iri, authActor.ID)...)
+ 	} else {
+ 		if authActor.ID != "" {
+ 			colFilters = append(colFilters, filters.Authorized(authActor.ID))
+@@ -907,6 +879,15 @@
+ 	}
+ 
+ 	it, err := loadItemFromStorage(o.Storage, iri, colFilters...)
++	// Extra follower access is never applied to collections or failed authentication.
++	// Preserve the original request path: irif performs path cleaning internally.
++	exactRequest := vocab.IRI("https://" + r.Host + r.URL.EscapedPath())
++	if authErr == nil && !vocab.ValidCollectionIRI(iri) && r.URL.RawQuery == "" && !r.URL.ForceQuery && r.URL.Fragment == "" && iri == exactRequest && (errors.IsNotFound(err) || errors.IsForbidden(err)) {
++		if resource, granted := o.loadLocalFollowerResource(iri, authActor.ID); granted {
++			it, err = resource, nil
++		}
++	}
++
+ 	if err != nil {
+ 		if errors.IsNotFound(err) && len(o.a) == 1 && !hasPath(iri) {
+ 			if a := o.a[0]; !a.ID.Equals(iri, true) {
+@@ -919,6 +900,7 @@
+ 		return
+ 	}
+ 
++	it = privateMediaActorResponse(it, r)
+ 	it = vocab.CleanRecipients(it)
+ 	accepts := getItemAcceptedContentType(it, r)
+ 	switch {
+@@ -1062,10 +1044,9 @@
+ 		u.RawQuery = ""
+ 		u.RawFragment = ""
+ 		i = vocab.IRI(u.String())
+-		if _, err := c.Storage.Load(i); err == nil {
+-			return true
+-		}
+-		return false
++		// Probe-only: ownership is explicitly configured, never inferred from cached remote actors.
++		owned := vocab.IRI(os.Getenv("ONI_PROBE_LOCAL_ACTOR"))
++		return owned != "" && i.Equals(owned, true)
+ 	}
+ }
+ 
+@@ -1105,6 +1086,11 @@
+ 
+ 	return func(receivedIn vocab.IRI, r *http.Request) (vocab.Item, int, error) {
+ 		var it vocab.Item
++		canonical, canonicalErr := canonicalProbeReceivedIn(receivedIn, r)
++		if canonicalErr != nil {
++			return nil, http.StatusBadRequest, canonicalErr
++		}
++		receivedIn = canonical
+ 		lctx := lw.Ctx{}
+ 
+ 		actor := o.oniActor(r)
+@@ -1202,8 +1188,40 @@
+ // requested ActivityStreams object.
+ //
+ // https://www.w3.org/TR/activitypub/#proxyUrl
++// Cookie credentials must not turn the proxy into a cross-origin owner session.
++func proxyCookieOriginAllowed(r *http.Request, actor vocab.IRI) bool {
++	if len(r.Header.Values("Cookie")) == 0 {
++		return true
++	}
++	origins, hasOrigin := r.Header["Origin"]
++	if !hasOrigin {
++		site := r.Header.Get("Sec-Fetch-Site")
++		return site != "cross-site" && site != "same-site"
++	}
++	if len(origins) != 1 || origins[0] == "" {
++		return false
++	}
++	origin, err := url.Parse(origins[0])
++	if err != nil || (origin.Scheme != "https" && origin.Scheme != "http") || origin.Host == "" || origin.User != nil || origin.Opaque != "" || origin.Path != "" || origin.RawQuery != "" || origin.ForceQuery || origin.Fragment != "" {
++		return false
++	}
++	owner, err := actor.URL()
++	return err == nil && owner != nil && origin.Scheme == owner.Scheme && origin.Host == owner.Host && origins[0] == origin.Scheme+"://"+origin.Host
++}
++
+ func (o *oni) ProxyURL() http.Handler {
+ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		preventResourceCaching(w)
++		actor := o.oniActor(r)
++		if !proxyCookieOriginAllowed(r, actor.ID) {
++			errors.HandleError(errors.Forbiddenf("proxy cookie origin is not permitted")).ServeHTTP(w, r)
++			return
++		}
++		authorized, authErr := o.loadAuthorizedActor(r, actor)
++		if authErr != nil || actor.ID == "" || authorized.ID == "" || authorized.ID == auth.AnonymousActor.ID || authorized.ID != actor.ID || !o.IRIHasLocalParent()(actor.ID) {
++			errors.HandleError(errors.Forbiddenf("proxy requires the authenticated local owner")).ServeHTTP(w, r)
++			return
++		}
+ 		if contentType := r.Header.Get("Content-Type"); contentType != "application/x-www-form-urlencoded" {
+ 			errors.HandleError(errors.UnsupportedMediaTypef("content type is not supported by the proxy")).ServeHTTP(w, r)
+ 			return
+@@ -1215,30 +1233,40 @@
+ 			return
+ 		}
+ 
+-		// NOTE(marius): if we can load a valid actor from the request, we use it for fetching the/
+-		// remote resource pointed at by "id"
+-		actor := o.oniActor(r)
+-
+-		authorized := auth.AnonymousActor
+-		if stored, ok := r.Context().Value(authorizedActorCtxKey).(vocab.Actor); ok {
+-			authorized = stored
+-		}
+ 		lCtx := lw.Ctx{"iri": id, "actor": authorized.ID}
+ 
+-		cl := o.Client(actor, lctx)
+-
+-		proxyReq, err := cl.FetchRequest(r.Context(), id)
++		cl := o.proxyClient(actor, lctx)
++
++		ctx, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
++		defer cancel()
++		proxyReq, err := cl.FetchRequest(ctx, id)
+ 		if err != nil {
+-			errors.HandleError(err).ServeHTTP(w, r)
++			errors.HandleError(errors.BadGatewayf("proxy resource retrieval failed")).ServeHTTP(w, r)
+ 			return
++		}
++
++		// Only these exact raster preferences opt into binary proxy retrieval.
++		// Set before Do so the existing client signs the final request headers.
++		rasterAccept := ""
++		switch r.Header.Get("Accept") {
++		case "image/png", "image/jpeg", "image/webp":
++			rasterAccept = r.Header.Get("Accept")
++			proxyReq.Header.Set("Accept", rasterAccept)
+ 		}
+ 
+ 		res, err := cl.Do(proxyReq)
+ 		if err != nil {
+-			errors.HandleError(err).ServeHTTP(w, r)
++			errors.HandleError(errors.BadGatewayf("proxy resource retrieval failed")).ServeHTTP(w, r)
+ 			return
+ 		}
+ 		defer res.Body.Close()
++		if rasterAccept != "" && res.StatusCode >= 200 && res.StatusCode < 300 {
++			returnedType, _, parseErr := mime.ParseMediaType(res.Header.Get("Content-Type"))
++			if len(res.Header.Values("Content-Type")) != 1 || parseErr != nil || returnedType != rasterAccept {
++				errors.HandleError(errors.BadGatewayf("proxy raster response type did not match request")).ServeHTTP(w, r)
++				return
++			}
++		}
+ 
+ 		ll := o.Logger.WithContext(lCtx, lw.Ctx{"status": res.Status})
+ 		logFn := ll.Infof
+@@ -1253,6 +1281,8 @@
+ 			}
+ 		}
+ 
++		preventResourceCaching(w)
++		w.Header().Del("Set-Cookie")
+ 		w.WriteHeader(res.StatusCode)
+ 		if _, err = io.Copy(w, res.Body); err != nil {
+ 			ll.WithContext(lw.Ctx{"err": err}).Warnf("unable to passthrough the response body")
+--- /dev/null
++++ b/probe_received_in.go
+@@ -0,0 +1,35 @@
++package oni
++
++import (
++	vocab "github.com/go-ap/activitypub"
++	"github.com/go-ap/errors"
++	"net/http"
++	"net/url"
++	"os"
++	"strings"
++)
++
++// Probe-only: TLS terminates at the isolated gateway. Use its explicitly configured
++// owned origin, never a caller-supplied forwarded scheme, for collection identity.
++// The request used by signature validation remains unchanged.
++func canonicalProbeReceivedIn(receivedIn vocab.IRI, r *http.Request) (vocab.IRI, error) {
++	configured := os.Getenv("ONI_PROBE_LOCAL_ACTOR")
++	if configured == "" {
++		return receivedIn, nil
++	}
++	origin, err := url.Parse(configured)
++	if err != nil || origin.Scheme != "https" || origin.Host == "" || origin.User != nil || (origin.Path != "" && origin.Path != "/") || origin.RawQuery != "" || origin.Fragment != "" {
++		return "", errors.BadRequestf("invalid configured probe origin")
++	}
++	if r == nil || r.URL == nil || !strings.EqualFold(r.Host, origin.Host) {
++		return "", errors.BadRequestf("request host differs from configured probe origin")
++	}
++	canonical := *r.URL
++	canonical.Scheme = origin.Scheme
++	canonical.Host = origin.Host
++	canonical.User = nil
++	canonical.Opaque = ""
++	canonical.Fragment = ""
++	canonical.RawFragment = ""
++	return vocab.IRI(canonical.String()), nil
++}
+--- /dev/null
++++ b/probe_received_in_test.go
+@@ -0,0 +1,60 @@
++package oni
++
++import (
++	vocab "github.com/go-ap/activitypub"
++	"github.com/go-ap/processing"
++	"net/http/httptest"
++	"testing"
++)
++
++func TestProbeReceivedIn(t *testing.T) {
++	const origin = "https://alice.test:18446/"
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", origin)
++	t.Run("TLS_terminated_inbox_stays_local", func(t *testing.T) {
++		r := httptest.NewRequest("POST", "http://alice.test:18446/inbox", nil)
++		got, err := canonicalProbeReceivedIn("http://alice.test:18446/inbox", r)
++		if err != nil {
++			t.Fatal(err)
++		}
++		p := processing.New(processing.WithLocalIRIChecker(func(iri vocab.IRI) bool {
++			u, err := iri.URL()
++			return err == nil && u.Scheme == "https" && u.Host == "alice.test:18446"
++		}))
++		act := &vocab.Activity{Type: vocab.CreateType, Actor: vocab.IRI("https://bob.test:18446/"), To: vocab.ItemCollection{vocab.PublicNS}, CC: vocab.ItemCollection{vocab.IRI("https://bob.test:18446/followers")}}
++		recipients := p.BuildInboxRecipientsList(act, got)
++		local := 0
++		for _, rec := range recipients {
++			if p.IsLocal(rec) {
++				local++
++			}
++		}
++		if local != 1 {
++			t.Fatalf("local recipient count=%d", local)
++		}
++	})
++	t.Run("path_query_and_request_unchanged", func(t *testing.T) {
++		r := httptest.NewRequest("POST", "http://alice.test:18446/inbox%2Fpart?x=1&x=2", nil)
++		before := r.URL.String()
++		got, err := canonicalProbeReceivedIn(vocab.IRI(before), r)
++		if err != nil || got != "https://alice.test:18446/inbox%2Fpart?x=1&x=2" {
++			t.Fatalf("canonical path/query incorrect: error=%t", err != nil)
++		}
++		if r.URL.String() != before || r.TLS != nil {
++			t.Fatal("request mutated")
++		}
++	})
++	t.Run("reject_host_mismatch", func(t *testing.T) {
++		r := httptest.NewRequest("POST", "http://other.test:18446/inbox", nil)
++		if _, err := canonicalProbeReceivedIn("http://other.test:18446/inbox", r); err == nil {
++			t.Fatal("mismatched host accepted")
++		}
++	})
++	t.Run("unconfigured_unchanged", func(t *testing.T) {
++		t.Setenv("ONI_PROBE_LOCAL_ACTOR", "")
++		r := httptest.NewRequest("POST", "http://other.test/inbox", nil)
++		got, err := canonicalProbeReceivedIn("http://other.test/inbox", r)
++		if err != nil || got != "http://other.test/inbox" {
++			t.Fatal("unconfigured behavior changed")
++		}
++	})
++}
+--- /dev/null
++++ b/probe_collection_owner.go
+@@ -0,0 +1,34 @@
++package oni
++
++import (
++	vocab "github.com/go-ap/activitypub"
++	"github.com/go-ap/filters"
++)
++
++func collectionAuthorizationChecks(collection, requested, actorID vocab.IRI) filters.Checks {
++	if isOwnCollectionRequest(collection, requested) {
++		return nil
++	}
++	return filters.Checks{filters.Authorized(actorID)}
++}
++
++// isOwnCollectionRequest compares resource identity independently of page and
++// filter queries. It must not normalize a different origin or path into an
++// ownership grant, or modify the IRI later used to load the requested page.
++func isOwnCollectionRequest(collection, requested vocab.IRI) bool {
++	owner, err := collection.URL()
++	if err != nil || owner == nil {
++		return false
++	}
++	page, err := requested.URL()
++	if err != nil || page == nil {
++		return false
++	}
++	if (owner.Scheme != "https" && owner.Scheme != "http") || owner.Host == "" || owner.Opaque != "" || owner.User != nil || owner.Fragment != "" || owner.RawQuery != "" || owner.ForceQuery {
++		return false
++	}
++	if page.Opaque != "" || page.User != nil || page.Fragment != "" {
++		return false
++	}
++	return owner.Scheme == page.Scheme && owner.Host == page.Host && owner.EscapedPath() == page.EscapedPath()
++}
+--- /dev/null
++++ b/probe_collection_owner_test.go
+@@ -0,0 +1,159 @@
++package oni
++
++import (
++	"fmt"
++	vocab "github.com/go-ap/activitypub"
++	"github.com/go-ap/filters"
++	"testing"
++	"time"
++)
++
++func TestOwnCollectionRequestIdentity(t *testing.T) {
++	const own vocab.IRI = "https://alice.test:18448/inbox"
++	for _, tc := range []struct {
++		name                string
++		collection, request vocab.IRI
++		want                bool
++	}{
++		{"bare", own, own, true},
++		{"first", own, own + "?maxItems=20", true},
++		{"after", own, own + "?maxItems=20&after=https%3A%2F%2Fexample.test%2Fitem", true},
++		{"before_and_filter", own, own + "?before=x&type=Create", true},
++		{"different_actor", "https://bob.test:18448/inbox", own + "?maxItems=20", false},
++		{"different_scheme", own, "http://alice.test:18448/inbox?maxItems=20", false},
++		{"different_port", own, "https://alice.test:18449/inbox?maxItems=20", false},
++		{"different_path", own, "https://alice.test:18448/outbox?maxItems=20", false},
++		{"path_case", own, "https://alice.test:18448/Inbox", false},
++		{"path_dot", own, "https://alice.test:18448/x/../inbox", false},
++		{"path_encoding", own, "https://alice.test:18448/%69nbox", false},
++		{"userinfo", own, "https://other@alice.test:18448/inbox", false},
++		{"fragment", own, own + "#different", false},
++		{"anonymous", "", own, false},
++		{"both_empty", "", "", false},
++		{"relative", "/inbox", "/inbox?maxItems=20", false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			if got := isOwnCollectionRequest(tc.collection, tc.request); got != tc.want {
++				t.Fatalf("ownership=%t want=%t", got, tc.want)
++			}
++		})
++	}
++}
++
++func TestOwnCollectionFollowersAddressedPage(t *testing.T) {
++	const alice vocab.IRI = "https://alice.test:18448/"
++	const own vocab.IRI = "https://alice.test:18448/inbox"
++	note := &vocab.Activity{ID: "https://bob.test:18448/activities/1", Type: vocab.CreateType, Actor: vocab.IRI("https://bob.test:18448/"), To: vocab.ItemCollection{vocab.IRI("https://bob.test:18448/followers")}, Object: &vocab.Object{ID: "https://bob.test:18448/notes/1", Type: vocab.NoteType}}
++	if filters.Authorized(alice).Match(note) {
++		t.Fatal("fixture must demonstrate collection-addressed recipient exclusion")
++	}
++	for _, request := range []vocab.IRI{own, own + "?maxItems=20", own + "?maxItems=20&after=cursor"} {
++		checks := filters.Checks{}
++		if !isOwnCollectionRequest(own, request) {
++			checks = append(checks, filters.Authorized(alice))
++		}
++		if !filters.All(checks...).Match(note) {
++			t.Fatal("owner page lost a server-delivered followers-addressed activity")
++		}
++	}
++	for _, visitor := range []vocab.IRI{"", "https://charlie.test:18448/"} {
++		collection := vocab.IRI("")
++		if visitor != "" {
++			collection = visitor + "inbox"
++		}
++		if isOwnCollectionRequest(collection, own+"?maxItems=20") {
++			t.Fatal("visitor treated as owner")
++		}
++		if filters.Authorized(visitor).Match(note) {
++			t.Fatal("visitor gained collection-addressed access")
++		}
++	}
++}
++
++func TestOwnCollection32RowPagination(t *testing.T) {
++	const inbox vocab.IRI = "https://alice.test:18448/inbox"
++	const alice vocab.IRI = "https://alice.test:18448/"
++	items := make(vocab.ItemCollection, 32)
++	for i := range items {
++		items[i] = &vocab.Activity{ID: vocab.ID(fmt.Sprintf("https://bob.test:18448/activities/%d", i)), Type: vocab.CreateType, Actor: vocab.IRI("https://bob.test:18448/"), AttributedTo: vocab.IRI("https://bob.test:18448/"), Object: &vocab.Object{ID: vocab.ID(fmt.Sprintf("https://bob.test:18448/notes/%d", i)), Type: vocab.NoteType, AttributedTo: vocab.IRI("https://bob.test:18448/")}, Published: time.Unix(int64(32-i), 0), To: vocab.ItemCollection{vocab.PublicNS}}
++	}
++	items[0].(*vocab.Activity).Type = vocab.LikeType
++	items[31].(*vocab.Activity).To = vocab.ItemCollection{vocab.IRI("https://bob.test:18448/followers")}
++	for _, tc := range []struct {
++		name              string
++		actor, collection vocab.IRI
++		query             string
++		want              int
++		private           bool
++	}{
++		{"owner_bare", alice, inbox, "", 32, true},
++		{"owner_first_after", alice, inbox, "?maxItems=20", 32, true},
++		{"owner_single_page", alice, inbox, "?maxItems=100", 32, true},
++		{"owner_type_filter", alice, inbox, "?maxItems=20&type=Create", 31, true},
++		{"visitor", "https://charlie.test:18448/", "https://charlie.test:18448/inbox", "?maxItems=20", 31, false},
++		{"anonymous", "", "", "?maxItems=20", 31, false},
++		{"visitor_type_filter", "https://charlie.test:18448/", "https://charlie.test:18448/inbox", "?maxItems=20&type=Create", 30, false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			request := inbox + vocab.IRI(tc.query)
++			seen := map[vocab.IRI]bool{}
++			private := false
++			pages := 0
++			for {
++				pages++
++				if pages > 3 {
++					t.Fatal("page traversal did not terminate")
++				}
++				original := request
++				checks, err := filters.FromIRI(request)
++				if err != nil {
++					t.Fatal(err)
++				}
++				parsed, _ := request.URL()
++				if !parsed.Query().Has("maxItems") {
++					checks = append(checks, filters.WithMaxCount(20))
++				}
++				checks = append(checks, collectionAuthorizationChecks(tc.collection, request, tc.actor)...)
++				if request != original {
++					t.Fatal("authorization changed requested page IRI")
++				}
++				input := &vocab.OrderedCollection{ID: request, Type: vocab.OrderedCollectionType, TotalItems: 32, OrderedItems: append(vocab.ItemCollection{}, items...)}
++				got := checks.Run(input)
++				page, ok := got.(*vocab.OrderedCollectionPage)
++				if !ok {
++					t.Fatalf("unexpected shape %T", got)
++				}
++				for _, it := range page.OrderedItems {
++					id := it.GetLink()
++					if seen[id] {
++						t.Fatal("duplicate item across pages")
++					}
++					seen[id] = true
++					if id == items[31].GetLink() {
++						private = true
++					}
++					if tc.query == "?maxItems=20&type=Create" && it.GetType() != vocab.CreateType {
++						t.Fatal("content filter lost")
++					}
++				}
++				if vocab.IsNil(page.Next) || page.Next.GetLink() == vocab.EmptyIRI {
++					break
++				}
++				request = page.Next.GetLink()
++				nextURL, err := request.URL()
++				if err != nil {
++					t.Fatal(err)
++				}
++				if parsed.Query().Get("type") != nextURL.Query().Get("type") {
++					t.Fatal("next lost content query")
++				}
++				if nextURL.Query().Get("after") == "" {
++					t.Fatal("next has no cursor")
++				}
++			}
++			if len(seen) != tc.want || private != tc.private {
++				t.Fatalf("count=%d want=%d private=%t want=%t", len(seen), tc.want, private, tc.private)
++			}
++		})
++	}
++}
+--- /dev/null
++++ b/probe_response_cache_test.go
+@@ -0,0 +1,76 @@
++package oni
++
++import (
++	v "github.com/go-ap/activitypub"
++	"net/http"
++	"net/http/httptest"
++	"testing"
++	"time"
++)
++
++func TestProbePrivateDynamicResponseNoStore(t *testing.T) {
++	for _, typ := range []v.ActivityVocabularyType{v.NoteType, v.CreateType, v.OrderedCollectionType, v.ImageType, v.TombstoneType} {
++		for _, auth := range []string{"none", "Authorization", "Cookie", "Signature", "Signature-Input"} {
++			for _, method := range []string{http.MethodGet, http.MethodHead} {
++				t.Run(string(typ)+"/"+auth+"/"+method, func(t *testing.T) {
++					stamp := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
++					req := httptest.NewRequest(method, "https://alice.test/objects/synthetic", nil)
++					if auth != "none" {
++						req.Header.Set(auth, "synthetic-test-value")
++					}
++					req.Header.Set("If-None-Match", `"test-etag"`)
++					req.Header.Set("If-Modified-Since", stamp.Format(time.RFC1123))
++					w := httptest.NewRecorder()
++					w.Header().Set("ETag", `"stale"`)
++					w.Header().Set("Last-Modified", stamp.Format(time.RFC1123))
++					writeResponse([]byte("synthetic"), typ, stamp, "application/activity+json", `"test-etag"`).ServeHTTP(w, req)
++					want := http.StatusOK
++					if typ == v.TombstoneType {
++						want = http.StatusGone
++					}
++					if w.Code != want {
++						t.Errorf("status=%d want=%d", w.Code, want)
++					}
++					if w.Header().Get("Cache-Control") != "private, no-store" {
++						t.Error("dynamic response is cacheable")
++					}
++					if w.Header().Get("ETag") != "" || w.Header().Get("Last-Modified") != "" {
++						t.Error("private validator retained")
++					}
++					if method == http.MethodHead && w.Body.Len() != 0 {
++						t.Error("HEAD returned body")
++					}
++					if method == http.MethodGet && w.Body.String() != "synthetic" {
++						t.Error("GET response body missing")
++					}
++				})
++			}
++		}
++	}
++}
++
++func TestProbePrivateResourceRepresentationsNoStore(t *testing.T) {
++	server := &oni{a: []v.Actor{{ID: "https://alice.test/", Type: v.PersonType}}}
++	note := &v.Object{ID: "https://alice.test/objects/synthetic", Type: v.NoteType, AttributedTo: v.IRI("https://alice.test/"), Content: v.NaturalLanguageValues{v.NilLangRef: v.Content("Synthetic fixture text")}, To: v.ItemCollection{v.IRI("https://alice.test/followers")}}
++	image := &v.Object{ID: "https://alice.test/objects/image", Type: v.ImageType, MediaType: "image/png", Content: v.NaturalLanguageValues{v.NilLangRef: v.Content("data:image/png;base64,AQID")}}
++	for _, tc := range []struct {
++		name    string
++		handler http.HandlerFunc
++	}{{"json", server.ServeActivityPubItem(note)}, {"html", server.ServeHTML(note)}, {"binary", server.ServeBinData(image)}} {
++		t.Run(tc.name, func(t *testing.T) {
++			req := httptest.NewRequest("GET", note.ID.String(), nil)
++			req.Header.Set("Authorization", "Bearer synthetic")
++			w := httptest.NewRecorder()
++			tc.handler.ServeHTTP(w, req)
++			if w.Code != 200 || w.Body.Len() == 0 {
++				t.Fatalf("representation status=%d bodyPresent=%t", w.Code, w.Body.Len() > 0)
++			}
++			if w.Header().Get("Cache-Control") != "private, no-store" {
++				t.Error("resource representation is cacheable")
++			}
++			if w.Header().Get("ETag") != "" || w.Header().Get("Last-Modified") != "" {
++				t.Error("resource representation retains validator")
++			}
++		})
++	}
++}
+--- /dev/null
++++ b/probe_proxy_private_test.go
+@@ -0,0 +1,152 @@
++package oni
++
++import (
++	"context"
++	"crypto"
++	"crypto/rand"
++	"fmt"
++	"git.sr.ht/~mariusor/lw"
++	storage "git.sr.ht/~mariusor/storage-all"
++	v "github.com/go-ap/activitypub"
++	"github.com/openshift/osin"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"strings"
++	"testing"
++)
++
++type proxyGateStore struct{ storage.FullStorage }
++
++func (proxyGateStore) LoadKey(v.IRI) (crypto.PrivateKey, error) { return nil, nil }
++func (proxyGateStore) LoadAccess(string) (*osin.AccessData, error) {
++	return nil, fmt.Errorf("synthetic invalid token")
++}
++
++type proxyGateTransport struct{ calls int }
++
++func (c *proxyGateTransport) RoundTrip(r *http.Request) (*http.Response, error) {
++	c.calls++
++	return &http.Response{StatusCode: 200, Status: "200 OK", Header: http.Header{"Content-Type": {"application/activity+json"}, "Cache-Control": {"public, max-age=600"}, "Etag": {`"upstream"`}, "Last-Modified": {"Wed, 01 Jan 2025 00:00:00 GMT"}, "Set-Cookie": {"auth=upstream; Path=/"}}, Body: io.NopCloser(strings.NewReader(`{"type":"Note","content":"synthetic"}`)), Request: r}, nil
++}
++func TestProbeProxyOwnerGate(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	// The dev-tag HTTP client caches by URL; each run and case must reach
++	// this test transport rather than reuse a prior synthetic response.
++	runID := rand.Text()
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType}
++	for _, kind := range []string{"anonymous", "invalid_bearer", "invalid_cookie", "wrong_actor", "alias_actor", "empty_actor", "owner"} {
++		t.Run(kind, func(t *testing.T) {
++			transport := &proxyGateTransport{}
++			original := http.DefaultTransport
++			http.DefaultTransport = transport
++			t.Cleanup(func() { http.DefaultTransport = original })
++			server := &oni{Control: Control{Storage: proxyGateStore{}, Logger: lw.Nil()}, a: []v.Actor{owner}}
++			request := httptest.NewRequest("POST", "https://bob.test/proxyUrl", strings.NewReader(url.Values{"id": {"https://bob.test/objects/gate-" + runID + "/" + kind}}.Encode()))
++			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
++			switch kind {
++			case "invalid_bearer":
++				request.Header.Set("Authorization", "Bearer synthetic-invalid")
++			case "invalid_cookie":
++				request.AddCookie(&http.Cookie{Name: "auth", Value: "invalid"})
++			case "wrong_actor":
++				request = request.WithContext(context.WithValue(request.Context(), authorizedActorCtxKey, v.Actor{ID: "https://alice.test/", Type: v.PersonType}))
++			case "alias_actor":
++				request = request.WithContext(context.WithValue(request.Context(), authorizedActorCtxKey, v.Actor{ID: "https://BOB.test/", Type: v.PersonType}))
++			case "empty_actor":
++				request = request.WithContext(context.WithValue(request.Context(), authorizedActorCtxKey, v.Actor{}))
++			case "owner":
++				request = request.WithContext(context.WithValue(request.Context(), authorizedActorCtxKey, owner))
++			}
++			recorder := httptest.NewRecorder()
++			server.ProxyURL().ServeHTTP(recorder, request)
++			if kind == "owner" {
++				if recorder.Code != 200 || transport.calls != 1 || !strings.Contains(recorder.Body.String(), "synthetic") {
++					t.Errorf("owner status=%d calls=%d", recorder.Code, transport.calls)
++				}
++			} else {
++				if recorder.Code != 401 && recorder.Code != 403 {
++					t.Errorf("untrusted status=%d", recorder.Code)
++				}
++				if transport.calls != 0 {
++					t.Errorf("untrusted target requests=%d", transport.calls)
++				}
++			}
++			if recorder.Header().Get("Cache-Control") != "private, no-store" {
++				t.Error("proxy response cacheable")
++			}
++			for _, header := range []string{"ETag", "Last-Modified", "Set-Cookie"} {
++				if recorder.Header().Get(header) != "" {
++					t.Errorf("unsafe upstream header %s retained", header)
++				}
++			}
++		})
++	}
++}
++
++func TestProbeProxyCookieOriginGate(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	// The dev-tag HTTP client caches by URL; each run and case must reach
++	// this test transport rather than reuse a prior synthetic response.
++	runID := rand.Text()
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType}
++	for _, tc := range []struct {
++		name                  string
++		origins               []string
++		site                  string
++		cookie, bearer, allow bool
++	}{
++		{"cross_origin_cookie", []string{"https://evil.test"}, "cross-site", true, false, false},
++		{"dummy_bearer_does_not_bypass_cookie", []string{"https://evil.test"}, "cross-site", true, true, false},
++		{"null_origin", []string{"null"}, "", true, false, false},
++		{"malformed_origin", []string{":bad"}, "", true, false, false},
++		{"multiple_origin", []string{"https://bob.test", "https://evil.test"}, "", true, false, false},
++		{"origin_path", []string{"https://bob.test/path"}, "", true, false, false},
++		{"origin_credentials", []string{"https://other@bob.test"}, "", true, false, false},
++		{"origin_query", []string{"https://bob.test?x=1"}, "", true, false, false},
++		{"empty_origin", []string{""}, "", true, false, false},
++		{"missing_origin_cross_site", nil, "cross-site", true, false, false},
++		{"missing_origin_same_site", nil, "same-site", true, false, false},
++		{"same_origin_cookie", []string{"https://bob.test"}, "same-origin", true, false, true},
++		{"cli_cookie", nil, "", true, false, true},
++		{"cross_origin_bearer_no_cookie", []string{"https://client.test"}, "cross-site", false, true, true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			transport := &proxyGateTransport{}
++			original := http.DefaultTransport
++			http.DefaultTransport = transport
++			t.Cleanup(func() { http.DefaultTransport = original })
++			server := &oni{Control: Control{Storage: proxyGateStore{}, Logger: lw.Nil()}, a: []v.Actor{owner}}
++			request := httptest.NewRequest("POST", "https://bob.test/proxyUrl", strings.NewReader(url.Values{"id": {"https://bob.test/objects/cookie-" + runID + "/" + tc.name}}.Encode()))
++			request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
++			request = request.WithContext(context.WithValue(request.Context(), authorizedActorCtxKey, owner))
++			if tc.cookie {
++				request.Header.Set("Cookie", "auth=synthetic")
++			}
++			if tc.bearer {
++				request.Header.Set("Authorization", "Bearer synthetic")
++			}
++			if tc.origins != nil {
++				request.Header["Origin"] = tc.origins
++			}
++			if tc.site != "" {
++				request.Header.Set("Sec-Fetch-Site", tc.site)
++			}
++			w := httptest.NewRecorder()
++			server.ProxyURL().ServeHTTP(w, request)
++			if tc.allow {
++				if w.Code != 200 || transport.calls != 1 {
++					t.Errorf("allowed status=%d requests=%d", w.Code, transport.calls)
++				}
++			} else {
++				if w.Code != 403 || transport.calls != 0 {
++					t.Errorf("rejected status=%d requests=%d", w.Code, transport.calls)
++				}
++			}
++			if w.Header().Get("Cache-Control") != "private, no-store" {
++				t.Error("cacheable proxy response")
++			}
++		})
++	}
++}
+--- /dev/null
++++ b/probe_proxy_raster_test.go
+@@ -0,0 +1,122 @@
++package oni
++
++import (
++	"context"
++	"crypto/rand"
++	"git.sr.ht/~mariusor/lw"
++	v "github.com/go-ap/activitypub"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"slices"
++	"strings"
++	"testing"
++)
++
++type rasterProxyTransport struct {
++	accept             string
++	calls              int
++	responseType, body string
++}
++
++func (c *rasterProxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
++	c.accept = strings.Join(r.Header.Values("Accept"), ",")
++	c.calls++
++	if c.responseType == "negotiate" {
++		contentType, body := "application/activity+json", "synthetic metadata"
++		if c.accept == "image/png" {
++			contentType, body = "image/png", "\x00\xffsynthetic binary"
++		}
++		return &http.Response{StatusCode: 200, Status: "200 OK", Header: http.Header{"Content-Type": {contentType}, "Cache-Control": {"private, no-store"}, "Vary": {"Accept"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}, nil
++	}
++	return &http.Response{StatusCode: 200, Status: "200 OK", Header: http.Header{"Content-Type": strings.Split(c.responseType, "\n"), "Cache-Control": {"private, no-store"}}, Body: io.NopCloser(strings.NewReader(c.body)), Request: r}, nil
++}
++func TestProbeProxyRasterNegotiation(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType}
++	runID := rand.Text()
++	for _, tc := range []struct {
++		name, accept, responseType string
++		allowed                    bool
++	}{
++		{"png", "image/png", "image/png", true},
++		{"jpeg", "image/jpeg", "image/jpeg", true},
++		{"webp", "image/webp", "image/webp", true},
++		{"png_parameters", "image/png", "image/png; charset=binary", true},
++		{"metadata", "application/activity+json", "application/activity+json", true},
++		{"default_metadata", "", "application/activity+json", true},
++		{"unsupported_image", "image/gif", "application/activity+json", true},
++		{"weighted_image", "image/png;q=0.8", "application/activity+json", true},
++		{"json_fallback", "image/png", "application/activity+json", false},
++		{"html_fallback", "image/png", "text/html", false},
++		{"wrong_raster", "image/png", "image/jpeg", false},
++		{"missing_type", "image/png", "", false},
++		{"duplicate_type", "image/png", "image/png\ntext/html", false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			body := "synthetic-binary-payload"
++			raster := slices.Contains([]string{"image/png", "image/jpeg", "image/webp"}, tc.accept)
++			if raster {
++				body = "\x00\xff" + body
++			}
++			transport := &rasterProxyTransport{responseType: tc.responseType, body: body}
++			prior := http.DefaultTransport
++			http.DefaultTransport = transport
++			t.Cleanup(func() { http.DefaultTransport = prior })
++			server := &oni{Control: Control{Storage: proxyGateStore{}, Logger: lw.Nil()}, a: []v.Actor{owner}}
++			req := httptest.NewRequest("POST", "https://bob.test/proxyUrl", strings.NewReader(url.Values{"id": {"https://bob.test/media/" + runID + "/" + tc.name}}.Encode()))
++			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
++			if tc.accept != "" {
++				req.Header.Set("Accept", tc.accept)
++			}
++			req = req.WithContext(context.WithValue(req.Context(), authorizedActorCtxKey, owner))
++			w := httptest.NewRecorder()
++			server.ProxyURL().ServeHTTP(w, req)
++			if transport.calls != 1 {
++				t.Fatalf("target requests=%d", transport.calls)
++			}
++			if raster {
++				if transport.accept != tc.accept {
++					t.Errorf("raster Accept not forwarded")
++				}
++			} else if !strings.Contains(transport.accept, "application/activity+json") || strings.Contains(transport.accept, "image/") {
++				t.Error("metadata default changed")
++			}
++			if tc.allowed {
++				if w.Code != 200 || w.Body.String() != body || w.Header().Get("Content-Type") != tc.responseType {
++					t.Errorf("allowed representation status=%d bytesMatch=%t", w.Code, w.Body.String() == body)
++				}
++			} else {
++				if w.Code != http.StatusBadGateway || strings.Contains(w.Body.String(), body) {
++					t.Errorf("mismatched representation status=%d bodyForwarded=%t", w.Code, strings.Contains(w.Body.String(), body))
++				}
++			}
++			if w.Header().Get("Cache-Control") != "private, no-store" {
++				t.Error("proxy response cacheable")
++			}
++		})
++	}
++}
++
++func TestProbeProxyRasterMetadataThenBinary(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType}
++	transport := &rasterProxyTransport{responseType: "negotiate"}
++	prior := http.DefaultTransport
++	http.DefaultTransport = transport
++	t.Cleanup(func() { http.DefaultTransport = prior })
++	server := &oni{Control: Control{Storage: proxyGateStore{}, Logger: lw.Nil()}, a: []v.Actor{owner}}
++	target := "https://bob.test/media/same-resource-" + rand.Text()
++	for index, tc := range []struct{ accept, body string }{{"application/activity+json", "synthetic metadata"}, {"image/png", "\x00\xffsynthetic binary"}} {
++		req := httptest.NewRequest("POST", "https://bob.test/proxyUrl", strings.NewReader(url.Values{"id": {target}}.Encode()))
++		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
++		req.Header.Set("Accept", tc.accept)
++		req = req.WithContext(context.WithValue(req.Context(), authorizedActorCtxKey, owner))
++		w := httptest.NewRecorder()
++		server.ProxyURL().ServeHTTP(w, req)
++		if w.Code != 200 || w.Header().Get("Content-Type") != tc.accept || w.Body.String() != tc.body || transport.calls != index+1 {
++			t.Fatalf("representation %d status=%d calls=%d bytesMatch=%t", index, w.Code, transport.calls, w.Body.String() == tc.body)
++		}
++	}
++}
+--- a/control.go
++++ b/control.go
+@@ -45,6 +45,8 @@
+ 	initFns := []storage.InitFn{
+ 		storage.WithPath(storagePath),
+ 		storage.WithType(typ),
++		storage.WithCache(false),
++		storage.UseIndex(false),
+ 		storage.WithLogger(ll),
+ 	}
+ 	ll = ll.WithContext(lw.Ctx{"path": storagePath})
+@@ -102,20 +104,31 @@
+ }
+ 
+ func (c *Control) Client(actor vocab.Actor, lctx lw.Ctx) *client.C {
++	return c.newActorClient(actor, lctx, false)
++}
++func (c *Control) proxyClient(actor vocab.Actor, lctx lw.Ctx) *client.C {
++	return c.newActorClient(actor, lctx, true)
++}
++func (c *Control) newActorClient(actor vocab.Actor, lctx lw.Ctx, proxy bool) *client.C {
+ 	lctx["log"] = "client"
+ 	st := c.Storage
+ 	l := c.Logger.WithContext(lctx)
+ 
+ 	ua := fmt.Sprintf("%s@%s (+%s %s)", nameOni, Version, actor.GetLink(), ProjectURL)
+ 	tr := http.DefaultTransport
+-	if IsDev {
++	if proxy {
++		if standard, ok := tr.(*http.Transport); ok {
++			tr = standard.Clone()
++		}
++	}
++	if IsDev && !proxy {
+ 		cachePath, err := os.UserCacheDir()
+ 		if err != nil {
+ 			cachePath = os.TempDir()
+ 		}
+ 		tr = cache.Private(tr, cache.FS(filepath.Join(cachePath, "oni")))
+ 	}
+-	if InDebugMode.Load() {
++	if InDebugMode.Load() && !proxy {
+ 		tr = debug.New(debug.WithTransport(tr), debug.WithPath(c.StoragePath))
+ 	}
+ 
+@@ -138,7 +151,15 @@
+ 			initFns = append(initFns, client.WithAuthorizationFn(signer.SignRFC9421, signer.SignDraft))
+ 		}
+ 	}
+-	return client.New(initFns...)
++	cl := client.New(initFns...)
++	if proxy {
++		// The proxy must not reuse stale private cache data or dump remote bodies.
++		// Ordinary federation clients retain their existing cache/debug behavior.
++		baseClient.Transport = boundedProxyTransport{base: baseClient.Transport}
++		baseClient.Timeout = proxyRequestTimeout
++		baseClient.CheckRedirect = rejectProxyRedirect
++	}
++	return cl
+ }
+ 
+ func (c *Control) CreateActor(iri vocab.IRI, pw string) (*vocab.Actor, error) {
+--- /dev/null
++++ b/probe_follower_resource.go
+@@ -0,0 +1,178 @@
++package oni
++
++import (
++	v "github.com/go-ap/activitypub"
++	"github.com/go-ap/auth"
++	"github.com/go-ap/processing"
++	"net/url"
++	"os"
++)
++
++func exactResourceURL(iri v.IRI) (*url.URL, bool) {
++	u, err := iri.URL()
++	return u, err == nil && u != nil && (u.Scheme == "https" || u.Scheme == "http") && u.Host != "" && u.User == nil && u.Opaque == "" && u.RawQuery == "" && !u.ForceQuery && u.Fragment == ""
++}
++
++// Complete unfiltered membership is required, including negative block evidence.
++// SetupCtl pins both storage caching and indexing off for these reads.
++func (o *oni) completeLocalMembers(iri v.IRI) (map[v.IRI]bool, bool) {
++	item, err := o.Storage.Load(iri)
++	if err != nil || v.IsNil(item) || item.GetLink() != iri || (item.GetType() != v.CollectionType && item.GetType() != v.OrderedCollectionType) {
++		return nil, false
++	}
++	members := map[v.IRI]bool{}
++	valid := false
++	if err = v.OnCollection(item, func(c *v.Collection) error {
++		if !v.IsNil(c.First) || !v.IsNil(c.Last) || !v.IsNil(c.Current) || len(c.Items) > 10000 {
++			return nil
++		}
++		for _, member := range c.Items {
++			if v.IsNil(member) || (!v.IsIRI(member) && !v.ActorTypes.Match(member.GetType())) {
++				return nil
++			}
++			id := member.GetLink()
++			if _, ok := exactResourceURL(id); !ok || members[id] {
++				return nil
++			}
++			members[id] = true
++		}
++		valid = uint(len(members)) == c.TotalItems
++		return nil
++	}); err != nil {
++		return nil, false
++	}
++	return members, valid
++}
++
++// This adds only local Note/Image access. It never expands an arbitrary remote
++// audience, collection response, embedded resource, or caller-supplied owner.
++func (o *oni) loadLocalFollowerResource(requested v.IRI, requester v.IRI) (v.Item, bool) {
++	if requester == "" || requester == auth.AnonymousActor.ID {
++		return nil, false
++	}
++	if _, ok := exactResourceURL(requester); !ok {
++		return nil, false
++	}
++	owner := v.IRI(os.Getenv("ONI_PROBE_LOCAL_ACTOR"))
++	ownerURL, ok := exactResourceURL(owner)
++	if !ok || ownerURL.Path != "/" {
++		return nil, false
++	}
++	resourceURL, ok := exactResourceURL(requested)
++	if !ok || resourceURL.Scheme != ownerURL.Scheme || resourceURL.Host != ownerURL.Host || v.ValidCollectionIRI(requested) {
++		return nil, false
++	}
++	item, err := o.Storage.Load(requested)
++	if err != nil || v.IsNil(item) || item.GetLink() != requested || (item.GetType() != v.NoteType && item.GetType() != v.ImageType) {
++		return nil, false
++	}
++	followers := v.Followers.IRI(owner)
++	addressed := false
++	if err = v.OnObject(item, func(ob *v.Object) error {
++		if v.IsNil(ob.AttributedTo) || v.IsItemCollection(ob.AttributedTo) || ob.AttributedTo.GetLink() != owner {
++			return nil
++		}
++		for _, recipient := range ob.Recipients() {
++			if !v.IsNil(recipient) && recipient.GetLink() == followers {
++				addressed = true
++			}
++		}
++		return nil
++	}); err != nil || !addressed {
++		return nil, false
++	}
++	following, complete := o.completeLocalMembers(followers)
++	if !complete || !following[requester] {
++		return nil, false
++	}
++	blocked, complete := o.completeLocalMembers(processing.BlockedCollection.IRI(owner))
++	if !complete || blocked[requester] {
++		return nil, false
++	}
++	return projectFollowerResource(item)
++}
++
++// The grant covers only this resource, never objects embedded or expanded by
++// storage. Every nested resource requires its own authorization on dereference.
++func projectFollowerResource(item v.Item) (v.Item, bool) {
++	var projected *v.Object
++	valid := true
++	err := v.OnObject(item, func(original *v.Object) error {
++		copy := *original
++		fields := []*v.Item{&copy.Attachment, &copy.AttributedTo, &copy.Context, &copy.Generator, &copy.Icon, &copy.Image, &copy.InReplyTo, &copy.Location, &copy.Preview, &copy.Replies, &copy.URL, &copy.Likes, &copy.Shares}
++		for _, field := range fields {
++			var ok bool
++			*field, ok = followerReference(*field, 0)
++			if !ok {
++				valid = false
++				return nil
++			}
++		}
++		collections := []*v.ItemCollection{&copy.Audience, &copy.Tag, &copy.To, &copy.Bto, &copy.CC, &copy.BCC}
++		for _, field := range collections {
++			if len(*field) == 0 {
++				continue
++			}
++			refs, ok := followerReference(*field, 0)
++			if !ok {
++				valid = false
++				return nil
++			}
++			*field = refs.(v.ItemCollection)
++		}
++		projected = &copy
++		return nil
++	})
++	return projected, err == nil && valid && projected != nil
++}
++
++func followerReference(item v.Item, depth int) (v.Item, bool) {
++	if v.IsNil(item) {
++		return nil, true
++	}
++	if depth > 4 {
++		return nil, false
++	}
++	if v.IsItemCollection(item) {
++		var result v.ItemCollection
++		valid := true
++		err := v.OnItemCollection(item, func(items *v.ItemCollection) error {
++			if len(*items) > 10000 {
++				valid = false
++				return nil
++			}
++			result = make(v.ItemCollection, 0, len(*items))
++			for _, child := range *items {
++				ref, ok := followerReference(child, depth+1)
++				if !ok {
++					valid = false
++					return nil
++				}
++				if !v.IsNil(ref) {
++					result = append(result, ref)
++				}
++			}
++			return nil
++		})
++		return result, err == nil && valid
++	}
++	if id := item.GetID(); id != "" {
++		if _, ok := exactResourceURL(id); !ok {
++			return nil, false
++		}
++		return v.IRI(id), true
++	}
++	// An inline Mention/Link has no separately addressable identity. Preserve only
++	// its addressing semantics, never copied name/preview/media metadata.
++	if v.LinkTypes.Match(item.GetType()) {
++		link, err := v.ToLink(item)
++		if err != nil || link == nil {
++			return nil, false
++		}
++		if _, ok := exactResourceURL(link.Href); !ok {
++			return nil, false
++		}
++		return &v.Link{Type: link.Type, Href: link.Href}, true
++	}
++	return nil, false
++}
+--- /dev/null
++++ b/probe_follower_resource_test.go
+@@ -0,0 +1,300 @@
++package oni
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"git.sr.ht/~mariusor/lw"
++	storage "git.sr.ht/~mariusor/storage-all"
++	v "github.com/go-ap/activitypub"
++	"github.com/go-ap/auth"
++	"github.com/go-ap/errors"
++	"github.com/go-ap/filters"
++	"github.com/go-ap/processing"
++	"net/http"
++	"net/http/httptest"
++	"reflect"
++	"strings"
++	"testing"
++)
++
++func TestProbeFollowerResourceFS(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	db, err := storage.New(storage.WithType(storage.FS), storage.WithPath(t.TempDir()), storage.WithLogger(lw.Nil()), storage.WithCache(false), storage.UseIndex(false))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err = db.Open(); err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType, Followers: v.IRI("https://bob.test/followers"), Following: v.IRI("https://bob.test/following"), Inbox: v.IRI("https://bob.test/inbox"), Outbox: v.IRI("https://bob.test/outbox")}
++	requester := v.Actor{ID: "https://alice.test/", Type: v.PersonType}
++	if _, err = db.Save(&owner); err != nil {
++		t.Fatal(err)
++	}
++	// Use the actor-bootstrap collection creation function, including hidden blocked.
++	p := processing.New(processing.WithStorage(db))
++	if err = p.CreateCollectionsForObject(&owner); err != nil {
++		t.Fatal(err)
++	}
++	followers := v.Followers.IRI(owner)
++	blocked := processing.BlockedCollection.IRI(owner)
++	for i := 0; i < 24; i++ {
++		member := &v.Actor{ID: v.ID(fmt.Sprintf("https://member%d.test/", i)), Type: v.PersonType}
++		if _, err = db.Save(member); err != nil {
++			t.Fatal(err)
++		}
++		if err = db.AddTo(followers, member); err != nil {
++			t.Fatal(err)
++		}
++	}
++	if _, err = db.Save(&requester); err != nil {
++		t.Fatal(err)
++	}
++	if err = db.AddTo(followers, &requester); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = db.Load(followers, filters.WithMaxCount(20)); err != nil {
++		t.Fatal(err)
++	}
++	server := &oni{Control: Control{Storage: db, Logger: lw.Nil()}, a: []v.Actor{owner}}
++	imageID := v.IRI("https://bob.test/media/synthetic")
++	image := &v.Object{ID: imageID, Type: v.ImageType, AttributedTo: owner.ID, To: v.ItemCollection{followers}, MediaType: "image/png", Content: v.NaturalLanguageValues{v.NilLangRef: v.Content("data:image/png;base64,AQID")}}
++	if _, err = db.Save(image); err != nil {
++		t.Fatal(err)
++	}
++	read := func(accept string, allow bool) {
++		t.Helper()
++		r := httptest.NewRequest(http.MethodGet, imageID.String(), nil)
++		r.RequestURI = r.URL.RequestURI()
++		r.Header.Set("Accept", accept)
++		r = r.WithContext(context.WithValue(r.Context(), authorizedActorCtxKey, requester))
++		w := httptest.NewRecorder()
++		server.ActivityPubItem(w, r)
++		if allow {
++			if w.Code != 200 {
++				t.Errorf("eligible response status=%d accept=%s", w.Code, accept)
++			}
++			if accept == "image/png" && w.Body.String() != string([]byte{1, 2, 3}) {
++				t.Error("binary bytes changed")
++			}
++		} else if w.Code != 403 && w.Code != 404 {
++			t.Errorf("ineligible response status=%d", w.Code)
++		}
++	}
++	read("application/activity+json", true)
++	read("image/png", true)
++	if err = db.AddTo(blocked, &requester); err != nil {
++		t.Fatal(err)
++	}
++	read("application/activity+json", false)
++	read("image/png", false)
++	if err = db.RemoveFrom(blocked, &requester); err != nil {
++		t.Fatal(err)
++	}
++	read("application/activity+json", true)
++	read("image/png", true)
++	if err = db.RemoveFrom(followers, &requester); err != nil {
++		t.Fatal(err)
++	}
++	read("application/activity+json", false)
++	read("image/png", false)
++}
++
++type followerGrantStore struct {
++	storage.FullStorage
++	items map[v.IRI]v.Item
++}
++
++func (s followerGrantStore) Load(id v.IRI, checks ...filters.Check) (v.Item, error) {
++	if len(checks) > 0 {
++		return nil, errors.Newf("membership load must be unfiltered")
++	}
++	it, ok := s.items[id]
++	if !ok {
++		return nil, errors.NotFoundf("missing synthetic item")
++	}
++	return it, nil
++}
++func TestProbeFollowerResourceGuards(t *testing.T) {
++	const owner v.IRI = "https://bob.test/"
++	const alice v.IRI = "https://alice.test/"
++	const imageID v.IRI = "https://bob.test/media/synthetic"
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", string(owner))
++	for _, name := range []string{"valid", "note", "plain_collection", "nonmember", "blocked", "wrong_owner", "multiple_authors", "foreign_recipient", "owner_only", "missing_resource", "wrong_resource_id", "foreign_resource", "query", "anonymous", "missing_followers", "missing_blocked", "wrong_collection_id", "collection_page", "pagination", "incomplete", "duplicate", "invalid_member", "corrupt_blocked"} {
++		t.Run(name, func(t *testing.T) {
++			followers := &v.OrderedCollection{ID: v.Followers.IRI(owner), Type: v.OrderedCollectionType, TotalItems: 1, OrderedItems: v.ItemCollection{alice}}
++			blocked := &v.OrderedCollection{ID: processing.BlockedCollection.IRI(owner), Type: v.OrderedCollectionType}
++			resource := &v.Object{ID: imageID, Type: v.ImageType, AttributedTo: owner, To: v.ItemCollection{followers.ID}}
++			items := map[v.IRI]v.Item{imageID: resource, followers.ID: followers, blocked.ID: blocked}
++			request, requester := imageID, alice
++			switch name {
++			case "note":
++				resource.Type = v.NoteType
++			case "plain_collection":
++				items[followers.ID] = &v.Collection{ID: followers.ID, Type: v.CollectionType, TotalItems: 1, Items: v.ItemCollection{alice}}
++			case "nonmember":
++				followers.OrderedItems = nil
++				followers.TotalItems = 0
++			case "blocked":
++				blocked.OrderedItems = v.ItemCollection{alice}
++				blocked.TotalItems = 1
++			case "wrong_owner":
++				resource.AttributedTo = v.IRI("https://other.test/")
++			case "multiple_authors":
++				resource.AttributedTo = v.ItemCollection{owner, alice}
++			case "foreign_recipient":
++				resource.To = v.ItemCollection{v.IRI("https://other.test/followers")}
++			case "owner_only":
++				resource.To = v.ItemCollection{owner}
++			case "missing_resource":
++				delete(items, imageID)
++			case "wrong_resource_id":
++				resource.ID = "https://bob.test/media/other"
++			case "foreign_resource":
++				request = "https://other.test/media/synthetic"
++				resource.ID = request
++				items[request] = resource
++			case "query":
++				request = imageID + "?page=1"
++				resource.ID = request
++				items[request] = resource
++			case "anonymous":
++				requester = auth.AnonymousActor.ID
++			case "missing_followers":
++				delete(items, followers.ID)
++			case "missing_blocked":
++				delete(items, blocked.ID)
++			case "wrong_collection_id":
++				followers.ID = "https://bob.test/other"
++			case "collection_page":
++				items[followers.ID] = &v.OrderedCollectionPage{ID: followers.ID, Type: v.OrderedCollectionPageType, TotalItems: 1, OrderedItems: v.ItemCollection{alice}}
++			case "pagination":
++				followers.First = followers.ID + "?maxItems=20"
++			case "incomplete":
++				followers.TotalItems = 2
++			case "duplicate":
++				followers.OrderedItems = append(followers.OrderedItems, alice)
++				followers.TotalItems = 2
++			case "invalid_member":
++				followers.OrderedItems = v.ItemCollection{v.IRI("relative")}
++			case "corrupt_blocked":
++				blocked.TotalItems = 1
++			}
++			server := &oni{Control: Control{Storage: followerGrantStore{items: items}}}
++			_, allowed := server.loadLocalFollowerResource(request, requester)
++			want := name == "valid" || name == "note" || name == "plain_collection"
++			if allowed != want {
++				t.Fatalf("grant=%t want=%t", allowed, want)
++			}
++		})
++	}
++}
++
++func TestProbeFollowerNestedResourcesFS(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	db, err := storage.New(storage.WithType(storage.FS), storage.WithPath(t.TempDir()), storage.WithLogger(lw.Nil()), storage.WithCache(false), storage.UseIndex(false))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err = db.Open(); err != nil {
++		t.Fatal(err)
++	}
++	defer db.Close()
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType, Followers: v.IRI("https://bob.test/followers")}
++	alice := v.Actor{ID: "https://alice.test/", Type: v.PersonType}
++	if _, err = db.Save(&owner); err != nil {
++		t.Fatal(err)
++	}
++	if _, err = db.Save(&alice); err != nil {
++		t.Fatal(err)
++	}
++	p := processing.New(processing.WithStorage(db))
++	if err = p.CreateCollectionsForObject(&owner); err != nil {
++		t.Fatal(err)
++	}
++	if err = db.AddTo(v.Followers.IRI(owner), &alice); err != nil {
++		t.Fatal(err)
++	}
++	server := &oni{Control: Control{Storage: db, Logger: lw.Nil()}, a: []v.Actor{owner}}
++	for _, parentType := range []v.ActivityVocabularyType{v.NoteType, v.ImageType} {
++		for _, secretType := range []v.ActivityVocabularyType{v.NoteType, v.ImageType, v.LinkType} {
++			t.Run(string(parentType)+"/"+string(secretType), func(t *testing.T) {
++				const secretText = "private nested fixture sentinel"
++				const secretName = "private nested name sentinel"
++				var secret v.Item = &v.Object{ID: "https://bob.test/private/secret", Type: secretType, AttributedTo: owner.ID, To: v.ItemCollection{owner.ID}, Name: v.NaturalLanguageValues{v.NilLangRef: v.Content(secretName)}, Content: v.NaturalLanguageValues{v.NilLangRef: v.Content(secretText)}}
++				if secretType == v.LinkType {
++					secret = &v.Link{ID: "https://bob.test/private/secret", Type: v.LinkType, Href: "https://bob.test/private/link-target-sentinel", Name: v.NaturalLanguageValues{v.NilLangRef: v.Content(secretName)}}
++				}
++				if _, err = db.Save(secret); err != nil {
++					t.Fatal(err)
++				}
++				for _, property := range []string{"Tag", "Attachment", "Context", "Generator", "Icon", "Image", "InReplyTo", "Location", "Preview", "Replies", "URL", "Likes", "Shares", "Audience", "To", "CC"} {
++					t.Run(property, func(t *testing.T) {
++						parent := &v.Object{ID: "https://bob.test/resources/parent", Type: parentType, AttributedTo: owner.ID, To: v.ItemCollection{v.Followers.IRI(owner)}, Name: v.NaturalLanguageValues{v.NilLangRef: v.Content("allowed alt")}, Content: v.NaturalLanguageValues{v.NilLangRef: v.Content("allowed parent content")}}
++						if property == "Tag" {
++							parent.Tag = v.ItemCollection{secret.GetID(), &v.Link{Type: v.MentionType, Href: alice.ID, Name: v.NaturalLanguageValues{v.NilLangRef: v.Content("@alice")}, Preview: secret}}
++						} else if property == "Audience" || property == "To" || property == "CC" {
++							reflect.ValueOf(parent).Elem().FieldByName(property).Set(reflect.ValueOf(v.ItemCollection{v.Followers.IRI(owner), secret}))
++						} else {
++							reflect.ValueOf(parent).Elem().FieldByName(property).Set(reflect.ValueOf(v.Item(secret)))
++						}
++						if _, err = db.Save(parent); err != nil {
++							t.Fatal(err)
++						}
++						req := httptest.NewRequest("GET", parent.ID.String(), nil)
++						req.RequestURI = req.URL.RequestURI()
++						req.Header.Set("Accept", "application/activity+json")
++						req = req.WithContext(context.WithValue(req.Context(), authorizedActorCtxKey, alice))
++						w := httptest.NewRecorder()
++						server.ActivityPubItem(w, req)
++						if w.Code != 200 {
++							t.Fatalf("eligible parent status=%d", w.Code)
++						}
++						if strings.Contains(w.Body.String(), secretText) || strings.Contains(w.Body.String(), secretName) || strings.Contains(w.Body.String(), "link-target-sentinel") {
++							t.Error("separately private nested object data disclosed")
++						}
++						var body map[string]any
++						if err = json.Unmarshal(w.Body.Bytes(), &body); err != nil {
++							t.Fatal(err)
++						}
++						if body["name"] != "allowed alt" || body["content"] != "allowed parent content" {
++							t.Error("parent metadata changed")
++						}
++						if property == "Tag" && (!strings.Contains(w.Body.String(), `"Mention"`) || !strings.Contains(w.Body.String(), string(alice.ID))) {
++							t.Error("mention descriptor lost")
++						}
++					})
++				}
++			})
++		}
++	}
++}
++
++func TestProbeFollowerReferenceProjection(t *testing.T) {
++	const secret = "private nested fixture sentinel"
++	inline := &v.Link{Type: v.MentionType, Href: "https://alice.test/", Name: v.NaturalLanguageValues{v.NilLangRef: v.Content(secret)}, Preview: &v.Object{Content: v.NaturalLanguageValues{v.NilLangRef: v.Content(secret)}}}
++	projected, ok := followerReference(inline, 0)
++	if !ok {
++		t.Fatal("inline Mention addressing rejected")
++	}
++	blob, err := v.MarshalJSON(projected)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if strings.Contains(string(blob), secret) || !strings.Contains(string(blob), "Mention") || !strings.Contains(string(blob), "https://alice.test/") {
++		t.Fatal("inline Mention projection has wrong fields")
++	}
++	if _, ok := followerReference(&v.Object{Type: v.NoteType, Content: v.NaturalLanguageValues{v.NilLangRef: v.Content(secret)}}, 0); ok {
++		t.Fatal("unidentified nested resource accepted")
++	}
++	cycle := make(v.ItemCollection, 1)
++	cycle[0] = cycle
++	if _, ok := followerReference(cycle, 0); ok {
++		t.Fatal("recursive item array accepted")
++	}
++	if string(inline.Name.First()) != secret || inline.Preview == nil {
++		t.Fatal("projection mutated original object")
++	}
++}
+--- /dev/null
++++ b/probe_proxy_transport.go
+@@ -0,0 +1,48 @@
++package oni
++
++import (
++	"bytes"
++	"errors"
++	"io"
++	"net/http"
++	"strconv"
++	"time"
++)
++
++const proxyBodyLimit int64 = 5 * 1024 * 1024
++const proxyRequestTimeout = 10 * time.Second
++
++// Buffer every upstream status before the ActivityPub client's signature retry
++// code can drain it. No retry or downstream response receives an unbounded body.
++type boundedProxyTransport struct{ base http.RoundTripper }
++
++func (t boundedProxyTransport) RoundTrip(req *http.Request) (*http.Response, error) {
++	if req.Context().Err() != nil {
++		return nil, errors.New("proxy request expired")
++	}
++	res, err := t.base.RoundTrip(req)
++	if err != nil {
++		return nil, errors.New("proxy upstream request failed")
++	}
++	if res == nil || res.Body == nil {
++		return nil, errors.New("proxy upstream response missing")
++	}
++	defer res.Body.Close()
++	if res.ContentLength > proxyBodyLimit {
++		return nil, errors.New("proxy upstream response too large")
++	}
++	data, err := io.ReadAll(io.LimitReader(res.Body, proxyBodyLimit+1))
++	if err != nil || req.Context().Err() != nil {
++		return nil, errors.New("proxy upstream response interrupted")
++	}
++	if int64(len(data)) > proxyBodyLimit {
++		return nil, errors.New("proxy upstream response too large")
++	}
++	res.Body = io.NopCloser(bytes.NewReader(data))
++	res.ContentLength = int64(len(data))
++	res.Header.Set("Content-Length", strconv.Itoa(len(data)))
++	return res, nil
++}
++func rejectProxyRedirect(_ *http.Request, _ []*http.Request) error {
++	return errors.New("proxy redirects are not permitted")
++}
+--- /dev/null
++++ b/probe_proxy_transport_test.go
+@@ -0,0 +1,188 @@
++package oni
++
++import (
++	"context"
++	"crypto"
++	"crypto/rand"
++	"crypto/rsa"
++	"crypto/tls"
++	"git.sr.ht/~mariusor/lw"
++	v "github.com/go-ap/activitypub"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"strings"
++	"testing"
++	"time"
++)
++
++type boundedProxyTestStore struct {
++	proxyGateStore
++	key crypto.PrivateKey
++}
++
++func (s boundedProxyTestStore) LoadKey(v.IRI) (crypto.PrivateKey, error) { return s.key, nil }
++
++type proxyRoundTripFunc func(*http.Request) (*http.Response, error)
++
++func (fn proxyRoundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return fn(r) }
++
++type proxyCountBody struct {
++	io.Reader
++	bytes  int
++	closed bool
++}
++
++func (b *proxyCountBody) Read(p []byte) (int, error) {
++	n, e := b.Reader.Read(p)
++	b.bytes += n
++	return n, e
++}
++func (b *proxyCountBody) Close() error { b.closed = true; return nil }
++
++type proxyStallBody struct {
++	ctx    context.Context
++	closed bool
++}
++
++func (b *proxyStallBody) Read([]byte) (int, error) { <-b.ctx.Done(); return 0, b.ctx.Err() }
++func (b *proxyStallBody) Close() error             { b.closed = true; return nil }
++
++func TestProbeProxyTransportBounds(t *testing.T) {
++	t.Setenv("ONI_PROBE_LOCAL_ACTOR", "https://bob.test/")
++	key, err := rsa.GenerateKey(rand.Reader, 2048)
++	if err != nil {
++		t.Fatal(err)
++	}
++	owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType, PublicKey: v.PublicKey{ID: "https://bob.test/#main-key", Owner: "https://bob.test/"}}
++	for _, scenario := range []string{"redirect", "error_oversize", "raster_oversize", "stalled_body", "valid_png"} {
++		t.Run(scenario, func(t *testing.T) {
++			calls, secondHits := 0, 0
++			firstSigned := false
++			var counted *proxyCountBody
++			var stalled *proxyStallBody
++			transport := proxyRoundTripFunc(func(r *http.Request) (*http.Response, error) {
++				calls++
++				if calls == 1 {
++					firstSigned = r.Header.Get("Signature") != "" || r.Header.Get("Signature-Input") != ""
++				}
++				if r.URL.Host == "second.test" {
++					secondHits++
++				}
++				status := 200
++				headers := http.Header{"Content-Type": {"image/png"}, "Cache-Control": {"private, no-store"}}
++				var body io.ReadCloser = io.NopCloser(strings.NewReader("\x89PNG\r\n\x1a\nsynthetic"))
++				switch scenario {
++				case "redirect":
++					if r.URL.Host == "first.test" {
++						status = 302
++						headers.Set("Location", "https://second.test/same-path")
++						body = io.NopCloser(strings.NewReader("redirect"))
++					}
++				case "error_oversize", "raster_oversize":
++					if scenario == "error_oversize" {
++						status = 403
++					}
++					counted = &proxyCountBody{Reader: strings.NewReader(strings.Repeat("X", 5*1024*1024+100))}
++					body = counted
++				case "stalled_body":
++					stalled = &proxyStallBody{ctx: r.Context()}
++					body = stalled
++				case "valid_png":
++					deadline, ok := r.Context().Deadline()
++					if !ok || time.Until(deadline) > 11*time.Second {
++						t.Error("proxy request has no bounded total deadline")
++					}
++				}
++				return &http.Response{StatusCode: status, Header: headers, Body: body, ContentLength: -1, Request: r}, nil
++			})
++			prior := http.DefaultTransport
++			http.DefaultTransport = transport
++			t.Cleanup(func() { http.DefaultTransport = prior })
++			server := &oni{Control: Control{Storage: boundedProxyTestStore{key: key}, Logger: lw.Nil()}, a: []v.Actor{owner}}
++			req := httptest.NewRequest("POST", "https://bob.test/proxyUrl", strings.NewReader(url.Values{"id": {"https://first.test/same-path?case=" + scenario + "&run=" + rand.Text()}}.Encode()))
++			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
++			req.Header.Set("Accept", "image/png")
++			req = req.WithContext(context.WithValue(req.Context(), authorizedActorCtxKey, owner))
++			if scenario == "stalled_body" {
++				ctx, cancel := context.WithTimeout(req.Context(), 30*time.Millisecond)
++				defer cancel()
++				req = req.WithContext(ctx)
++			}
++			w := httptest.NewRecorder()
++			server.ProxyURL().ServeHTTP(w, req)
++			if !firstSigned {
++				t.Error("proxy request lost owner signing")
++			}
++			if scenario == "valid_png" {
++				if w.Code != 200 || w.Body.String() != "\x89PNG\r\n\x1a\nsynthetic" {
++					t.Error("valid raster representation changed")
++				}
++			} else if w.Code != 502 || w.Body.Len() > 1024 {
++				t.Errorf("failed proxy status=%d responseBytes=%d", w.Code, w.Body.Len())
++			}
++			if calls != 1 || secondHits != 0 {
++				t.Errorf("target requests=%d redirectedRequests=%d", calls, secondHits)
++			}
++			if counted != nil && (counted.bytes > 5*1024*1024+1 || !counted.closed) {
++				t.Errorf("upstream bytes=%d closed=%t", counted.bytes, counted.closed)
++			}
++			if stalled != nil && !stalled.closed {
++				t.Error("stalled body not closed")
++			}
++			if w.Header().Get("Cache-Control") != "private, no-store" {
++				t.Error("proxy response cacheable")
++			}
++		})
++	}
++}
++
++func TestProbeProxyBodyLimitEdges(t *testing.T) {
++	for _, tc := range []struct {
++		name     string
++		size     int
++		declared int64
++		allow    bool
++	}{{"at_limit", 5 * 1024 * 1024, -1, true}, {"one_over", 5*1024*1024 + 1, -1, false}, {"advertised_over", 1, 5*1024*1024 + 1, false}} {
++		t.Run(tc.name, func(t *testing.T) {
++			body := &proxyCountBody{Reader: strings.NewReader(strings.Repeat("X", tc.size))}
++			transport := boundedProxyTransport{base: proxyRoundTripFunc(func(r *http.Request) (*http.Response, error) {
++				return &http.Response{StatusCode: 200, Header: make(http.Header), ContentLength: tc.declared, Body: body, Request: r}, nil
++			})}
++			request := httptest.NewRequest("GET", "https://first.test/resource", nil)
++			response, err := transport.RoundTrip(request)
++			if tc.allow {
++				if err != nil {
++					t.Fatal("in-limit response rejected")
++				}
++				defer response.Body.Close()
++				data, readErr := io.ReadAll(response.Body)
++				if readErr != nil || len(data) != tc.size {
++					t.Fatal("in-limit body changed")
++				}
++			} else if err == nil {
++				response.Body.Close()
++				t.Fatal("oversize accepted")
++			}
++			if !body.closed {
++				t.Error("upstream body not closed")
++			}
++			if tc.declared > proxyBodyLimit && body.bytes != 0 {
++				t.Error("advertised oversized body was read")
++			}
++		})
++	}
++}
++
++func TestProbeProxyTransportDoesNotMutateDefaultTLS(t *testing.T) {
++	original := http.DefaultTransport
++	base := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: false}}
++	http.DefaultTransport = base
++	t.Cleanup(func() { http.DefaultTransport = original; base.CloseIdleConnections() })
++	control := Control{Storage: proxyGateStore{}, Logger: lw.Nil()}
++	control.proxyClient(v.Actor{ID: "https://bob.test/", Type: v.PersonType}, lw.Ctx{})
++	if base.TLSClientConfig.InsecureSkipVerify {
++		t.Fatal("proxy constructor changed global TLS verification")
++	}
++}
+--- /dev/null
++++ b/probe_private_media_capability.go
+@@ -0,0 +1,45 @@
++package oni
++
++import (
++	v "github.com/go-ap/activitypub"
++	"net/http"
++	"os"
++)
++
++const privateMediaCapabilityID v.IRI = "urn:kimino:oni:private-media:1"
++
++// This is an explicit experimental server assertion, not a standard ActivityPub
++// feature or an attestation. Only the exact configured root response advertises it.
++func privateMediaActorResponse(item v.Item, r *http.Request) v.Item {
++	if os.Getenv("KIMINO_PRIVATE_MEDIA_CAPABILITY") != "1" || v.IsNil(item) || !v.ActorTypes.Match(item.GetType()) {
++		return item
++	}
++	owner := v.IRI(os.Getenv("ONI_PROBE_LOCAL_ACTOR"))
++	root, valid := exactResourceURL(owner)
++	if !valid || root.Scheme != "https" || root.Path != "/" || item.GetID() != owner {
++		return item
++	}
++	if r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.Fragment != "" || v.IRI("https://"+r.Host+r.URL.EscapedPath()) != owner {
++		return item
++	}
++	actor, err := v.ToActor(item)
++	if err != nil || actor == nil {
++		return item
++	}
++	copy := *actor
++	generators := make(v.ItemCollection, 0)
++	if !v.IsNil(actor.Generator) {
++		if v.IsItemCollection(actor.Generator) {
++			_ = v.OnItemCollection(actor.Generator, func(items *v.ItemCollection) error { generators = append(generators, (*items)...); return nil })
++		} else {
++			generators = append(generators, actor.Generator)
++		}
++	}
++	for _, generator := range generators {
++		if !v.IsNil(generator) && generator.GetID() == privateMediaCapabilityID && v.ServiceType.Match(generator.GetType()) {
++			return item
++		}
++	}
++	copy.Generator = append(generators, &v.Actor{ID: privateMediaCapabilityID, Type: v.ServiceType})
++	return &copy
++}
+--- /dev/null
++++ b/probe_private_media_capability_test.go
+@@ -0,0 +1,99 @@
++package oni
++
++import (
++	"context"
++	"encoding/json"
++	"git.sr.ht/~mariusor/lw"
++	storage "git.sr.ht/~mariusor/storage-all"
++	v "github.com/go-ap/activitypub"
++	"github.com/go-ap/filters"
++	"net/http/httptest"
++	"testing"
++)
++
++type privateCapabilityStore struct {
++	storage.FullStorage
++	item v.Item
++}
++
++func (s privateCapabilityStore) Load(_ v.IRI, checks ...filters.Check) (v.Item, error) {
++	return filters.Checks(checks).Run(s.item), nil
++}
++func TestProbePrivateMediaCapability(t *testing.T) {
++	const capability = "urn:kimino:oni:private-media:1"
++	for _, tc := range []struct {
++		name                string
++		generator           v.Item
++		root, request, flag string
++		actor               bool
++		want                bool
++	}{
++		{"empty", nil, "https://bob.test/", "https://bob.test/", "1", true, true},
++		{"scalar", v.IRI("https://generator.test/"), "https://bob.test/", "https://bob.test/", "1", true, true},
++		{"array", v.ItemCollection{v.IRI("https://generator.test/one"), v.IRI("https://generator.test/two")}, "https://bob.test/", "https://bob.test/", "1", true, true},
++		{"disabled", nil, "https://bob.test/", "https://bob.test/", "", true, false},
++		{"unconfigured", nil, "", "https://bob.test/", "1", true, false},
++		{"remote", nil, "https://alice.test/", "https://bob.test/", "1", true, false},
++		{"query", nil, "https://bob.test/", "https://bob.test/?page=1", "1", true, false},
++		{"collection", nil, "https://bob.test/", "https://bob.test/outbox", "1", false, false},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			t.Setenv("ONI_PROBE_LOCAL_ACTOR", tc.root)
++			t.Setenv("KIMINO_PRIVATE_MEDIA_CAPABILITY", tc.flag)
++			owner := v.Actor{ID: "https://bob.test/", Type: v.PersonType, Generator: tc.generator, To: v.ItemCollection{v.PublicNS}}
++			var item v.Item = &owner
++			if !tc.actor {
++				item = &v.OrderedCollection{ID: "https://bob.test/outbox", Type: v.OrderedCollectionType, To: v.ItemCollection{v.PublicNS}}
++			}
++			before, err := v.MarshalJSON(item)
++			if err != nil {
++				t.Fatal(err)
++			}
++			server := &oni{Control: Control{Storage: privateCapabilityStore{item: item}, Logger: lw.Nil()}, a: []v.Actor{owner}}
++			req := httptest.NewRequest("GET", tc.request, nil)
++			req.RequestURI = req.URL.RequestURI()
++			req.Header.Set("Accept", "application/activity+json")
++			req = req.WithContext(context.WithValue(req.Context(), authorizedActorCtxKey, owner))
++			recorder := httptest.NewRecorder()
++			server.ActivityPubItem(recorder, req)
++			var response map[string]any
++			if recorder.Code == 200 {
++				if err = json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
++					t.Fatal(err)
++				}
++			}
++			var generators []any
++			if list, ok := response["generator"].([]any); ok {
++				generators = list
++			} else if value := response["generator"]; value != nil {
++				generators = []any{value}
++			}
++			count := 0
++			for _, value := range generators {
++				if object, ok := value.(map[string]any); ok && object["id"] == capability && object["type"] == "Service" {
++					count++
++				}
++			}
++			if (count == 1) != tc.want || count > 1 {
++				t.Errorf("capability count=%d want=%t status=%d", count, tc.want, recorder.Code)
++			}
++			if tc.name == "scalar" {
++				if len(generators) != 2 || generators[0] != "https://generator.test/" {
++					t.Error("scalar generator not preserved")
++				}
++			}
++			if tc.name == "array" {
++				if len(generators) != 3 || generators[0] != "https://generator.test/one" || generators[1] != "https://generator.test/two" {
++					t.Error("generator array not preserved")
++				}
++			}
++			after, err := v.MarshalJSON(item)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if string(before) != string(after) {
++				t.Error("stored representation mutated")
++			}
++		})
++	}
++}

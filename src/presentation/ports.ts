@@ -9,6 +9,9 @@ export interface Preferences {
   write(key: string, value: string): boolean;
   /** Saved note IRIs for one actor; storage key and format belong to the adapter. */
   readSaved(actor: string): string[];
+  /** Hidden author IRIs scoped to one account. */
+  readMuted(actor: string): string[];
+  writeMuted(actor: string, ids: string[]): boolean;
   /** Replaces the saved list; false when the browser store is unavailable. */
   writeSaved(actor: string, ids: string[]): boolean;
   /** The reading density this browser last chose; comfortable when nothing is stored. */

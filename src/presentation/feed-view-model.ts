@@ -1,3 +1,12 @@
+import type { ReadImage } from '../application/image-reader';
+import { CollectionReadCancelled } from '../application/collection-read';
+import {
+  createAccountDiscovery,
+  type AccountDiscoveryGateway,
+} from '../application/account-discovery';
+import { validateImages, IMAGE_LIMITS, type ImageDraft } from '../domain/images';
+import { mutedAuthorIds } from './reading-controls';
+import { readingCopy } from './copy-reading';
 import type { NoteDraft, ReactionKind, TimelineNote } from '../domain/social';
 import {
   DEMO_ACTOR,
@@ -32,12 +41,22 @@ export interface FeedSession {
   connect(credentials: ConnectionCredentials): Promise<void>;
   /** Resolves once the requested read settled, with whether one was started at all. */
   refresh(): Promise<boolean>;
+  continueReading?(): boolean;
+  cancelReading?(): void;
+  continueRelationshipReading?(): boolean;
+  cancelRelationshipReading?(): void;
   publish(draft: NoteDraft, replyTo?: TimelineNote): Promise<void>;
   react(note: TimelineNote, kind: ReactionKind, active: boolean): Promise<void>;
   /** Delete one of the reader's own notes. */
   deleteNote(note: TimelineNote): Promise<void>;
   /** Replace the content and content warning of one of the reader's own notes. */
   editNote(note: TimelineNote, draft: NoteDraft): Promise<void>;
+  loadRelationships?(): Promise<void>;
+  follow?(target: string): Promise<void>;
+  unfollow?(target: string): Promise<void>;
+  resolveImage?(id: string): Promise<void>;
+  loadImage?(noteId: string, url: string, signal: AbortSignal): Promise<ReadImage>;
+  discardImage?(id: string): void;
   disconnect(): void;
 }
 
@@ -66,6 +85,7 @@ export function createFeedViewModel(
   session: FeedSession,
   preferences: Preferences,
   focus: FocusPort,
+  discoveryGateway?: AccountDiscoveryGateway,
 ) {
   let local: FeedLocalState = {
     ...initialLocalState(),
@@ -73,15 +93,24 @@ export function createFeedViewModel(
     revealWarned: preferences.readRevealWarned(),
   };
   let remote = session.getSnapshot();
+  const loadMuted = () =>
+    remote.actor && !remote.demo
+      ? mutedAuthorIds(preferences.readMuted(remote.actor.id), remote.actor.id)
+      : [];
+  local.muted = loadMuted();
   let returnId: string | undefined;
   let returnScroll = 0;
+  let imageSequence = 0;
   /** Bumped by connect/explore/disconnect so a late POST rejection cannot mark a newer session. */
   const guard = createGuard();
   const listeners = new Set<(state: FeedState) => void>();
 
+  const discovery = createAccountDiscovery(discoveryGateway, emit);
+  local.discovery = discovery.getSnapshot();
   let state = deriveFeedState(remote, local);
 
   function emit() {
+    local.discovery = discovery.getSnapshot();
     state = deriveFeedState(remote, local);
     for (const listener of listeners) listener(state);
   }
@@ -98,6 +127,12 @@ export function createFeedViewModel(
   const unsubscribe = session.subscribe((snapshot) => {
     const previous = remote;
     remote = snapshot;
+    if (previous.actor?.id !== remote.actor?.id || previous.demo !== remote.demo) {
+      local.muted = loadMuted();
+      local.moderationOpen = false;
+      local.peopleOpen = false;
+      discovery.reset();
+    }
     // A newer session notice or a fresh request supersedes an older local notice.
     if (snapshot.notice && snapshot.notice !== previous.notice) {
       local.saveNotice = '';
@@ -180,9 +215,24 @@ export function createFeedViewModel(
     return { drafts, composeOptions };
   };
   /** The note is gone from the server: it leaves the list now, not at the next successful read. */
-  const dropped = (id: string): Partial<FeedLocalState> => ({
-    gone: local.gone.includes(id) ? local.gone : [...local.gone, id],
-  });
+  const dropped = (id: string): Partial<FeedLocalState> => {
+    const editing = editKey(id);
+    for (const key of [id, editing])
+      for (const image of local.draftImages[key] ?? []) session.discardImage?.(image.id);
+    const { [id]: _replyImages, [editing]: _editImages, ...draftImages } = local.draftImages;
+    const { [id]: _reply, [editing]: _edit, ...drafts } = local.drafts;
+    const {
+      [id]: _replyOptions,
+      [editing]: _editOptions,
+      ...composeOptions
+    } = local.composeOptions;
+    return {
+      gone: local.gone.includes(id) ? local.gone : [...local.gone, id],
+      draftImages,
+      drafts,
+      composeOptions,
+    };
+  };
 
   return {
     getSnapshot: () => state,
@@ -193,8 +243,19 @@ export function createFeedViewModel(
         listeners.delete(listener);
       };
     },
+    async loadImage(noteId: string, url: string, signal: AbortSignal): Promise<ReadImage> {
+      if (!session.loadImage) throw new SessionError({ kind: 'media-unsupported' });
+      return session.loadImage(noteId, url, signal);
+    },
+    continueReading: () => session.continueReading?.() ?? false,
+    cancelReading: () => session.cancelReading?.(),
+    continueRelationshipReading: () => session.continueRelationshipReading?.() ?? false,
+    cancelRelationshipReading: () => session.cancelRelationshipReading?.(),
     /** Stops observing the session; the shell calls this when the view goes away. */
     dispose() {
+      session.cancelReading?.();
+      session.cancelRelationshipReading?.();
+      discovery.dispose();
       unsubscribe();
       listeners.clear();
     },
@@ -203,11 +264,12 @@ export function createFeedViewModel(
      * persistence wrapper owns that - it only decides whether this session ends up offering
      * the reminder that, without it, a reload asks for the token again.
      */
-    async connect(url: string, token: string, remember = false) {
+    async connect(url: string, token: string, remember = false, mediaMode?: 'oni') {
       if (remote.connecting) return;
       guard.next();
-      patch(fresh());
-      await session.connect({ actorUrl: url, token });
+      discovery.reset();
+      patch({ ...fresh(), muted: loadMuted() });
+      await session.connect({ actorUrl: url, token, ...(mediaMode ? { mediaMode } : {}) });
       const actor = remote.actor;
       if (actor) {
         // "demo" typed as the URL lands on the sample gateway; that is never a remembered account.
@@ -229,11 +291,13 @@ export function createFeedViewModel(
     async explore() {
       if (remote.connecting) return;
       guard.next();
+      discovery.reset();
       patch(fresh());
       await session.connect({ actorUrl: DEMO_ACTOR, token: '' });
     },
     disconnect() {
       guard.next();
+      discovery.reset();
       reacting.clear();
       session.disconnect();
       returnId = undefined;
@@ -245,6 +309,7 @@ export function createFeedViewModel(
      * the author filter, and hides the current page alert.
      */
     navigate(view: FeedView) {
+      session.cancelRelationshipReading?.();
       patch({
         ...dismissed(),
         ...startingWrite(),
@@ -257,6 +322,7 @@ export function createFeedViewModel(
         actionError: {},
         authorFilter: undefined,
         actorSheet: undefined,
+        peopleOpen: false,
         pages: 1,
       });
     },
@@ -290,15 +356,103 @@ export function createFeedViewModel(
     closeHelp() {
       patch({ helpOpen: false });
     },
-    /** The in-app sheet about one author; nothing is fetched, it reads the loaded timeline. */
+    /** Identity is loaded data; a real account also reads its own relationship evidence. */
     openActor(id: string) {
-      patch({ actorSheet: id });
+      if (id === remote.actor?.id) session.cancelRelationshipReading?.();
+      patch({ actorSheet: id, peopleOpen: false });
+      if (!remote.demo && id !== remote.actor?.id)
+        void session.loadRelationships?.().catch(() => undefined);
     },
     closeActor() {
+      session.cancelRelationshipReading?.();
       patch({ actorSheet: undefined });
+    },
+    openPeople() {
+      if (!remote.actor || remote.connecting) return;
+      patch({ peopleOpen: true, actorSheet: undefined, helpOpen: false, moderationOpen: false });
+      if (!remote.demo) void session.loadRelationships?.().catch(() => undefined);
+    },
+    closePeople() {
+      session.cancelRelationshipReading?.();
+      patch({ peopleOpen: false });
+    },
+    setDiscoveryInput(input: string) {
+      if (!remote.actor || remote.demo || remote.connecting) return;
+      discovery.setInput(input);
+    },
+    async lookupAccount() {
+      if (!remote.actor || remote.demo || remote.connecting) return;
+      await discovery.lookup();
+    },
+    async loadRelationships() {
+      if (!session.loadRelationships) throw new SessionError({ kind: 'relationship-unsupported' });
+      await session.loadRelationships();
+    },
+    async follow(target: string) {
+      if (!session.follow) throw new SessionError({ kind: 'relationship-unsupported' });
+      try {
+        await session.follow(target);
+      } catch (error) {
+        if (!(error instanceof CollectionReadCancelled)) throw error;
+      }
+    },
+    async unfollow(target: string) {
+      if (!session.unfollow) throw new SessionError({ kind: 'relationship-unsupported' });
+      try {
+        await session.unfollow(target);
+      } catch (error) {
+        if (!(error instanceof CollectionReadCancelled)) throw error;
+      }
+    },
+    openModeration() {
+      session.cancelRelationshipReading?.();
+      patch({ moderationOpen: true, actorSheet: undefined, peopleOpen: false });
+    },
+    closeModeration() {
+      patch({ moderationOpen: false });
+    },
+    hideAuthor(id: string) {
+      if (!remote.actor || id === remote.actor.id || local.muted.includes(id)) return;
+      const muted = mutedAuthorIds([...local.muted, id], remote.actor.id);
+      if (!muted.includes(id)) return;
+      const stored = !remote.demo && preferences.writeMuted(remote.actor.id, muted);
+      session.cancelRelationshipReading?.();
+      const hidden = (noteId: string | undefined) =>
+        !!noteId && remote.timeline?.notes.some((note) => note.id === noteId && note.author === id);
+      patch({
+        muted,
+        actorSheet: undefined,
+        authorFilter: undefined,
+        pages: 1,
+        reply: local.reply?.author === id ? undefined : local.reply,
+        editing: hidden(local.editing) ? undefined : local.editing,
+        confirmDelete: hidden(local.confirmDelete) ? undefined : local.confirmDelete,
+        focusedNoteId: hidden(local.focusedNoteId) ? undefined : local.focusedNoteId,
+        ...notice(
+          remote.demo ? readingCopy.demo : stored ? readingCopy.persisted : readingCopy.temporary,
+        ),
+      });
+      focus.focusHeading();
+    },
+    unhideAuthor(id: string) {
+      if (!remote.actor || !local.muted.includes(id)) return;
+      const muted = local.muted.filter((author) => author !== id);
+      const stored = !remote.demo && preferences.writeMuted(remote.actor.id, muted);
+      patch({
+        muted,
+        pages: 1,
+        ...notice(
+          remote.demo
+            ? readingCopy.restoredDemo
+            : stored
+              ? readingCopy.restored
+              : readingCopy.temporary,
+        ),
+      });
     },
     /** "이 사람의 글만 보기": a client-side filter over loaded notes; the list comes back on screen. */
     filterAuthor(id: string) {
+      session.cancelRelationshipReading?.();
       patch({
         authorFilter: id,
         actorSheet: undefined,
@@ -315,6 +469,7 @@ export function createFeedViewModel(
       focus.focusMainComposer();
     },
     chooseReply(note: TimelineNote) {
+      if (local.muted.includes(note.author) && note.author !== remote.actor?.id) return;
       patch({ ...startingWrite(), reply: note });
       focus.focusReplyComposer(note.id);
     },
@@ -325,7 +480,9 @@ export function createFeedViewModel(
      */
     dismissReply(): boolean {
       const reply = local.reply;
-      const kept = !!reply && (local.drafts[reply.id] || '').trim().length > 0;
+      const kept =
+        !!reply &&
+        ((local.drafts[reply.id] || '').trim().length > 0 || !!local.draftImages[reply.id]?.length);
       patch({ reply: undefined, ...(kept ? notice(notices.replyDraftKept) : {}) });
       if (reply) focus.focusReplyButton(reply.id);
       return kept;
@@ -335,6 +492,7 @@ export function createFeedViewModel(
       patch({ saved: [...ids] });
     },
     openThread(note: TimelineNote, scrollY = 0) {
+      if (local.muted.includes(note.author) && note.author !== remote.actor?.id) return;
       if (!local.focusedNoteId) {
         returnId = note.id;
         returnScroll = scrollY;
@@ -361,10 +519,60 @@ export function createFeedViewModel(
         false,
       );
     },
+    /** Selected bytes and alt text stay here, never in browser preferences or tab restore. */
+    addDraftImage(key: string, image: Omit<ImageDraft, 'id'>) {
+      if (local.publishing.includes(key)) return;
+      if (!remote.actor || remote.connecting || !state.imageUploadEnabled) return;
+      const next = [
+        ...(local.draftImages[key] ?? []),
+        { ...image, id: `image-${++imageSequence}` },
+      ];
+      const reason = validateImages(next);
+      if (reason) {
+        fail(key, new SessionError({ kind: 'media-invalid', reason }), guard.current());
+        return;
+      }
+      patch({ draftImages: { ...local.draftImages, [key]: next } });
+    },
+    removeDraftImage(key: string, id: string) {
+      if (local.publishing.includes(key)) return;
+      session.discardImage?.(id);
+      patch({
+        draftImages: {
+          ...local.draftImages,
+          [key]: (local.draftImages[key] ?? []).filter((image) => image.id !== id),
+        },
+      });
+    },
+    setImageAlt(key: string, id: string, alt: string) {
+      if (local.publishing.includes(key)) return;
+      patch({
+        draftImages: {
+          ...local.draftImages,
+          [key]: (local.draftImages[key] ?? []).map((image) =>
+            image.id === id ? { ...image, alt: alt.slice(0, IMAGE_LIMITS.alt) } : image,
+          ),
+        },
+      });
+    },
+    async resolveImage(key: string, id: string) {
+      const started = guard.current();
+      try {
+        if (!session.resolveImage) throw new SessionError({ kind: 'media-unsupported' });
+        await session.resolveImage(id);
+        if (guard.isCurrent(started))
+          patch({ composeError: undefined, hiddenError: sessionError() });
+      } catch (error) {
+        fail(key, error, started);
+        throw error;
+      }
+    },
     setDraft(key: string, value: string) {
+      if (local.publishing.includes(key)) return;
       patch({ drafts: { ...local.drafts, [key]: value } });
     },
     setComposeOptions(key: string, value: ComposeOptions) {
+      if (local.publishing.includes(key)) return;
       patch({ composeOptions: { ...local.composeOptions, [key]: value } });
     },
     /**
@@ -393,20 +601,30 @@ export function createFeedViewModel(
     },
     /** Resolves when the server accepted the write; the reply composer closes even if re-load failed. */
     async publish(draft: NoteDraft, replyTo?: TimelineNote) {
-      patch(sending());
-      const started = guard.current();
       const key = replyTo?.id ?? 'new';
+      if (local.publishing.includes(key)) throw new SessionError({ kind: 'busy' });
+      const started = guard.current();
+      patch({ ...sending(), publishing: [...local.publishing, key] });
       try {
-        await session.publish(draft, replyTo);
+        const images = local.draftImages[key];
+        await session.publish(images?.length ? { ...draft, images } : draft, replyTo);
+        if (!guard.isCurrent(started)) throw new SessionError({ kind: 'not-connected' });
+        const { [key]: _sent, ...composeOptions } = local.composeOptions;
+        const { [key]: _text, ...drafts } = local.drafts;
+        const { [key]: _images, ...draftImages } = local.draftImages;
+        patch({
+          composeOptions,
+          drafts,
+          draftImages,
+          ...(replyTo && local.reply?.id === replyTo.id ? { reply: undefined } : {}),
+        });
       } catch (error) {
         fail(key, error, started);
         throw error;
+      } finally {
+        if (guard.isCurrent(started))
+          patch({ publishing: local.publishing.filter((pending) => pending !== key) });
       }
-      const { [key]: _sent, ...composeOptions } = local.composeOptions;
-      patch({
-        composeOptions,
-        ...(replyTo && local.reply?.id === replyTo.id ? { reply: undefined } : {}),
-      });
     },
     /**
      * Opens the delete confirmation for one note. Nothing is sent here: the confirmation is
@@ -441,7 +659,6 @@ export function createFeedViewModel(
       }
       if (!guard.isCurrent(started)) return;
       patch(settled());
-      const { [note.id]: _reply, [editKey(note.id)]: _edit, ...drafts } = local.drafts;
       const closed = local.focusedNoteId === note.id;
       patch({
         ...dropped(note.id),
@@ -449,7 +666,6 @@ export function createFeedViewModel(
         editing: local.editing === note.id ? undefined : local.editing,
         reply: local.reply?.id === note.id ? undefined : local.reply,
         focusedNoteId: closed ? undefined : local.focusedNoteId,
-        drafts,
         // The session says what actually happened - a deletion, or a note that was already
         // gone - and the local notice repeats that word rather than assuming one.
         ...(closed
@@ -503,7 +719,6 @@ export function createFeedViewModel(
         if (isGone(error) && guard.isCurrent(started)) {
           patch({
             ...dropped(note.id),
-            ...dropEdit(key),
             editing: local.editing === note.id ? undefined : local.editing,
             focusedNoteId: local.focusedNoteId === note.id ? undefined : local.focusedNoteId,
           });

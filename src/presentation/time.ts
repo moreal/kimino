@@ -10,7 +10,7 @@ function parse(value?: string): Date | undefined {
 }
 
 /** Korean relative time for feed timestamps: 방금 전 → N분 전 → N시간 전 → 어제 → N일 전 → date. */
-export function relativeTime(value?: string, now: Date | number = Date.now()): string {
+export function relativeTime(value: string | undefined, now: Date | number): string {
   const date = parse(value);
   if (!date) return UNKNOWN_TIME;
   const elapsed = (typeof now === 'number' ? now : now.getTime()) - date.getTime();

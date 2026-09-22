@@ -7,6 +7,8 @@ const preferences = (writable = true): Preferences => ({
   read: () => '',
   write: () => writable,
   readSaved: () => [],
+  readMuted: () => [],
+  writeMuted: () => writable,
   writeSaved: vi.fn(() => writable),
   readDensity: () => 'comfortable',
   writeDensity: () => writable,

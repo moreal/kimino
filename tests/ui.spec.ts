@@ -525,7 +525,7 @@ test('on a phone a failed reply is explained right under its composer, in Korean
 test('the remember checkbox is a single tappable row on a phone', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
-  const row = page.locator('.checkbox-label');
+  const row = page.locator('.remember-field .checkbox-label');
   const input = row.locator('input');
   const text = row.locator('span');
   const [rowBox, inputBox, textBox] = await Promise.all([
@@ -1002,7 +1002,8 @@ test.describe('round 6b', () => {
     await expect(sheet).toContainText('demo.invalid');
     await expect(sheet).toContainText('이 세션에서 불러온 글 1개');
     await expect(sheet).not.toContainText('팔로워');
-    await expect(sheet).not.toContainText('팔로우');
+    await expect(sheet).toContainText('미리보기에서는 팔로우를 전송하지 않아요.');
+    await expect(sheet.getByRole('button', { name: '팔로우', exact: true })).toHaveCount(0);
     const link = sheet.getByRole('link', { name: /서버에서 프로필 보기/ });
     await expect(link).toHaveAttribute('href', 'https://demo.invalid/people/sol');
     await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
@@ -1475,7 +1476,9 @@ test.describe('round 9: reaction scope, warned replies, dropped activities and l
     await page.locator('.feed-foot').getByText('자세히', { exact: true }).click();
     const dropped = page.locator('.feed-status-dropped');
     await expect(dropped).toBeVisible();
-    await expect(dropped).toHaveText('미지원 활동 2개는 표시하지 못했어요');
+    await expect(dropped).toHaveText(
+      '타임라인에 표시하지 않는 활동 2개가 있어요. 팔로우 같은 관계 활동이나 이 타임라인에서 해석하지 않는 유형이 포함될 수 있어요.',
+    );
     expect(await dropped.evaluate((el) => el.getBoundingClientRect().width > 0)).toBe(true);
   });
 
@@ -2311,11 +2314,11 @@ test.describe('round 12: the panel row, refused activities, a stale toast and th
     const refused = page.locator('.feed-status-refused');
     await refused.scrollIntoViewIfNeeded();
     await expect(refused).toBeVisible();
-    await expect(refused).toContainText('안전을 위해 거절한 활동 1개');
+    await expect(refused).toContainText('활동 1개를 제외했어요');
     // Refused is not the same admission as unsupported, and the foot says so in both places.
-    await expect(refused).toContainText('미지원이 아니라');
+    await expect(refused).toContainText('활동 형식이나 작성자 정보를 확인할 수 없어');
     await expect(page.locator('.feed-status-dropped')).toHaveText(
-      '미지원 활동 1개는 표시하지 못했어요',
+      '타임라인에 표시하지 않는 활동 1개가 있어요. 팔로우 같은 관계 활동이나 이 타임라인에서 해석하지 않는 유형이 포함될 수 있어요.',
     );
     expect(await refused.evaluate((el) => el.getBoundingClientRect().width > 0)).toBe(true);
   });
@@ -2692,9 +2695,11 @@ test.describe('round 13: names, Escape, the phone bar, the quiet foot and the hi
     await expect(dropped).toBeHidden();
     await expect(refused).toBeHidden();
     await page.locator('.feed-foot').getByText('자세히', { exact: true }).click();
-    await expect(dropped).toHaveText('미지원 활동 2개는 표시하지 못했어요');
-    await expect(refused).toContainText('안전을 위해 거절한 활동 1개');
-    await expect(refused).toContainText('미지원이 아니라');
+    await expect(dropped).toHaveText(
+      '타임라인에 표시하지 않는 활동 2개가 있어요. 팔로우 같은 관계 활동이나 이 타임라인에서 해석하지 않는 유형이 포함될 수 있어요.',
+    );
+    await expect(refused).toContainText('활동 1개를 제외했어요');
+    await expect(refused).toContainText('활동 형식이나 작성자 정보를 확인할 수 없어');
   });
 
   test('a timeline with nothing withheld says nothing about it', async ({ page }) => {
@@ -4872,7 +4877,7 @@ test.describe('round 19: laptop rows, quiet chrome', () => {
     expect(summaryBox.y + summaryBox.height).toBeGreaterThan(statusBox.y);
     expect(summaryBox.x).toBeGreaterThan(statusBox.x);
     await summary.click();
-    await expect(page.locator('.feed-status-refused')).toContainText('거절한 활동 1개');
+    await expect(page.locator('.feed-status-refused')).toContainText('활동 1개를 제외했어요');
     // Opened, the reason stands on its own line under the count.
     const reason = (await page.locator('.feed-status-refused').boundingBox())!;
     expect(reason.y).toBeGreaterThanOrEqual(statusBox.y + statusBox.height - 1);
@@ -4896,13 +4901,13 @@ test.describe('round 19: laptop rows, quiet chrome', () => {
     ).toBe(accent);
   });
 
-  test('the landing form starts empty with the local server as its placeholder, and the phone preview banner wraps instead of clipping', async ({
+  test('the landing form starts empty with an account URL example, and the phone preview banner wraps instead of clipping', async ({
     page,
   }) => {
     await page.goto('/');
     const field = page.getByLabel('Actor URL');
     await expect(field).toHaveValue('');
-    await expect(field).toHaveAttribute('placeholder', 'https://localhost:8443/');
+    await expect(field).toHaveAttribute('placeholder', 'https://social.example/users/me');
     await page.getByText('개발자용: 로컬 ONI 서버 연결').click();
     await expect(page.getByRole('link', { name: /로컬 서버 열기/ })).toHaveAttribute(
       'href',
@@ -4957,4 +4962,157 @@ test.describe('round 19: laptop rows, quiet chrome', () => {
     const replyFooter = card.locator('..').locator('.inline-reply .composer-footer');
     await expect(replyFooter).toBeInViewport({ ratio: 1 });
   });
+});
+
+test('a short phone viewport keeps the focused reply text visible when the form opens', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 300 });
+  await mockServer(page, [
+    createNote('long-parent', {
+      content: '<p>' + '긴 대화의 맥락을 읽고 답장을 써요. '.repeat(50) + '</p>',
+      to: ['https://www.w3.org/ns/activitystreams#Public'],
+    }),
+  ]);
+  await connectAs(page);
+  await page
+    .locator('.note-card')
+    .first()
+    .getByRole('button', { name: /에게 답글 달기/ })
+    .click();
+  const input = page.getByRole('textbox', { name: '답글 내용', exact: true });
+  await expect(input).toBeFocused();
+  // Wait for the mount scroll, not just the synchronous focus before that scroll.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  const box = await input.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y + box!.height).toBeLessThanOrEqual(300);
+  await input.fill('답장을 작성하는 중이에요.');
+  await input.press('Escape');
+  await page
+    .locator('.note-card')
+    .first()
+    .getByRole('button', { name: /에게 답글 달기/ })
+    .click();
+  await expect(input).toHaveValue('답장을 작성하는 중이에요.');
+});
+
+test('opening a reply on a phone reveals its submit button above the tab bar', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: '먼저 둘러보기' }).click();
+  await page
+    .locator('.note-card')
+    .first()
+    .getByRole('button', { name: /에게 답글 달기/ })
+    .click();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  const input = page.getByLabel('답글 내용');
+  await expect(input).toBeFocused();
+  const submit = await page.getByRole('button', { name: '답글 게시하기' }).boundingBox();
+  const navigation = await page.getByRole('navigation').boundingBox();
+  expect(submit!.y + submit!.height).toBeLessThanOrEqual(navigation!.y);
+  expect((await input.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+});
+
+test('the first visit offers a read-only preview before requesting credentials', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const explore = page.getByRole('button', { name: '먼저 둘러보기' });
+  const actor = page.getByRole('textbox', { name: '계정 주소 (Actor URL)', exact: true });
+  await expect(actor).toHaveAccessibleDescription(/Mastodon/);
+  const buttonBox = await explore.boundingBox();
+  expect(buttonBox!.y + buttonBox!.height).toBeLessThan((await actor.boundingBox())!.y);
+  await explore.click();
+  await expect(page.locator('.demo-pill')).toContainText('예시 글');
+  await expect(page.locator('.note-card')).toHaveCount(4);
+});
+
+test('a focused draft remains visible when the viewport shrinks after opening it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await page.getByRole('button', { name: '먼저 둘러보기' }).click();
+  await page
+    .locator('.note-card')
+    .first()
+    .getByRole('button', { name: /에게 답글 달기/ })
+    .click();
+  const input = page.getByLabel('답글 내용');
+  await input.fill('화면이 줄어도 계속 쓰던 곳이 보여요.');
+  await page.setViewportSize({ width: 390, height: 300 });
+  await expect(input).toBeFocused();
+  await expect(input).toBeInViewport({ ratio: 1 });
+  const tabBar = await page.getByRole('navigation').boundingBox();
+  const box = await input.boundingBox();
+  expect(box!.y + box!.height).toBeLessThanOrEqual(tabBar!.y);
+  await expect(input).toHaveValue('화면이 줄어도 계속 쓰던 곳이 보여요.');
+});
+
+test('an unavailable image explains failure, preserves alt text and retries only on request', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const imageUrl = 'https://media.example/reader-image.png';
+  let reads = 0;
+  await page.route(imageUrl, (route) => {
+    reads++;
+    expect(route.request().headers().authorization).toBeUndefined();
+    expect(route.request().headers().referer).toBeUndefined();
+    return reads === 1
+      ? route.fulfill({ status: 404, body: '' })
+      : route.fulfill({
+          contentType: 'image/png',
+          body: Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX8kAAAAASUVORK5CYII=',
+            'base64',
+          ),
+        });
+  });
+  await mockServer(page, [
+    createNote(1, {
+      content: '<p>접근 제한이 있는 사진</p>',
+      attachment: [
+        { type: 'Image', url: imageUrl, mediaType: 'image/png', name: '창가에 앉은 고양이' },
+      ],
+    }),
+  ]);
+  await connect(page);
+  const card = page.locator('.note-card').first();
+  expect(reads).toBe(0);
+  await card.getByRole('button', { name: '이미지 불러오기', exact: true }).click();
+  await expect(card.getByRole('alert')).toContainText('이미지를 불러오지 못했어요.');
+  await expect(card.locator('.attachment-alt')).toHaveText('창가에 앉은 고양이');
+  await expect(card.locator('img.attachment-image')).toHaveCount(0);
+  expect(reads).toBe(1);
+  await expect(
+    card.getByRole('button', { name: '이미지 다시 불러오기', exact: true }),
+  ).toBeFocused();
+  await card.getByRole('button', { name: '이미지 다시 불러오기', exact: true }).click();
+  await expect
+    .poll(() =>
+      card.locator('img.attachment-image').evaluate((el: HTMLImageElement) => el.naturalWidth),
+    )
+    .toBe(1);
+  await expect(card.getByRole('alert')).toHaveCount(0);
+  expect(reads).toBe(2);
+  await expect(card.getByRole('button', { name: '이미지 숨기기', exact: true })).toBeFocused();
+  await card.getByRole('button', { name: '이미지 숨기기', exact: true }).click();
+  await expect(card.locator('img.attachment-image')).toHaveCount(0);
+  await expect(card.getByRole('button', { name: '이미지 불러오기', exact: true })).toBeVisible();
+  expect(reads).toBe(2);
+  await expect(card.getByRole('button', { name: '이미지 불러오기', exact: true })).toBeFocused();
 });

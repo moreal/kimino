@@ -341,17 +341,19 @@ export const connectionCopy = {
   actorUrlHelp:
     'ActivityPub C2S를 지원하는 서버의 계정 주소. Mastodon 계정은 아직 연결할 수 없어요.',
   tokenMemory: '토큰은 기본적으로 이 탭의 메모리에만 보관돼요. 새로고침하면 다시 연결해주세요.',
-  remember: `${REMEMBER_LABEL} (sessionStorage)`,
+  remember: REMEMBER_LABEL,
   rememberHelp:
     '체크하면 Actor URL과 액세스 토큰을 이 탭의 sessionStorage에 저장해요. 탭을 닫으면 지워지고 다른 탭이나 기기에는 공유되지 않아요.',
   developerSummary: '개발자용: 로컬 ONI 서버 연결',
   exploreHelp: `가입 없이 예시 글로 화면을 둘러볼 수 있어요. 이 탭에는 ${DEMO_MODE} 표시, 목록 이름, 저장한 글 링크만 남고 탭을 닫으면 지워져요.`,
   tagline: '소음은 줄이고, 대화는 가까이.',
   taglineHelp: '시간 순서대로 읽고, 한 사람의 이야기에 집중하는 ActivityPub 클라이언트예요.',
-  accountHeading: '내 계정으로 시작하기',
-  actorUrlLabel: 'Actor URL',
-  /** The empty field shows the local fixture's address; a first visit types its own. */
-  actorUrlPlaceholder: DEV_SERVER_URL,
+  previewHelp: '가입 없이 예시 글을 읽고, 대화와 저장을 체험해보세요. 실제로 게시되지는 않아요.',
+  previewPrivacy: '미리보기에서 보관하는 정보',
+  accountHeading: 'C2S 계정 연결',
+  actorUrlLabel: '계정 주소 (Actor URL)',
+  /** A generic account example; local fixture instructions stay in developer help. */
+  actorUrlPlaceholder: 'https://social.example/users/me',
   tokenLabel: '액세스 토큰',
   tokenPlaceholder: '서버에서 발급한 Bearer 토큰',
   connect: '연결하기',
@@ -400,32 +402,29 @@ export function disconnectLabel(demo: boolean): string {
  * after a write is partial - it re-reads what a write could have changed, not the whole
  * server - and the line says so rather than passing it off as a full check.
  */
-export function lastChecked(loadedAt?: string, now?: Date | number, partial = false): string {
+export function lastChecked(
+  loadedAt: string | undefined,
+  now: Date | number,
+  partial = false,
+): string {
   if (!loadedAt) return '아직 확인 전';
   return `마지막 ${partial ? '부분 확인' : '확인'} ${relativeTime(loadedAt, now)}`;
 }
-/**
- * Activities this client does not understand and therefore did not show. It is the one place
- * the client admits it dropped something, so it is printed, not hidden in a tooltip - and it
- * stays quiet when there is nothing to admit.
- */
-export function unsupportedActivities(ignored = 0): string {
-  return ignored > 0 ? `미지원 활동 ${ignored}개는 표시하지 못했어요` : '';
+/** Activities not rendered as posts; this is not a product-wide support claim. */
+export function unshownActivities(ignored = 0): string {
+  return ignored > 0
+    ? `타임라인에 표시하지 않는 활동 ${ignored}개가 있어요. 팔로우 같은 관계 활동이나 이 타임라인에서 해석하지 않는 유형이 포함될 수 있어요.`
+    : '';
 }
-/**
- * Activities the client understood and refused: the server holds them, but their author does
- * not match the activity that carries them, so showing them would put someone else's name on
- * a post. Said apart from the unsupported ones, because "거절" and "미지원" are not the same
- * admission - and, like them, printed rather than hidden, and silent when there is nothing.
- */
+/** Invalid shapes and ownership evidence are separate from unrendered activity types. */
 export function refusedActivities(rejected = 0): string {
   return rejected > 0
-    ? `안전을 위해 거절한 활동 ${rejected}개는 표시하지 않았어요 (미지원이 아니라, 작성자 정보가 맞지 않아 거절한 활동이에요)`
+    ? `활동 형식이나 작성자 정보를 확인할 수 없어 활동 ${rejected}개를 제외했어요`
     : '';
 }
 /**
- * Everything the client read and did not show, as one count: the reasons (unsupported,
- * refused for safety) stay in the words above, behind the foot's disclosure. Silent at zero.
+ * Everything the client read and did not show, as one count: the reasons (not rendered,
+ * invalid evidence) stay in the words above, behind the foot's disclosure. Silent at zero.
  */
 export function hiddenActivities(ignored = 0, rejected = 0): string {
   const total = ignored + rejected;
@@ -433,12 +432,12 @@ export function hiddenActivities(ignored = 0, rejected = 0): string {
 }
 /** Profile card one-liner replacing the diagnostics disclosure. */
 export function syncSummary(
-  loadedAt?: string,
+  loadedAt: string | undefined,
   ignored = 0,
-  now?: Date | number,
+  now: Date | number,
   partial = false,
 ): string {
-  return `${lastChecked(loadedAt, now, partial)} · 미지원 활동 ${ignored}개`;
+  return `${lastChecked(loadedAt, now, partial)} · 타임라인 미표시 활동 ${ignored}개`;
 }
 
 /**
@@ -497,6 +496,11 @@ export const contentCopy = {
   showContent: '내용 보기',
   hideContent: '접기',
   loadImage: '이미지 불러오기',
+  retryImage: '이미지 다시 불러오기',
+  hideImage: '이미지 숨기기',
+  imageLoading: '이미지를 불러오는 중…',
+  imageFailed:
+    '이미지를 불러오지 못했어요. 서버 연결이나 접근 권한을 확인한 뒤 다시 시도해 주세요.',
   /** The attachment list's accessible name, with its counts. */
   attachmentsLabel: (summary: string) => `첨부 ${summary}`,
   addWarning: '경고 문구 추가',
@@ -504,8 +508,6 @@ export const contentCopy = {
   warningLabel: '경고 문구',
   warningPlaceholder: '예: 스포일러, 식사 중 주의',
   visibilityLegend: '공개 범위',
-  /** What this composer cannot do yet: there is no file input, so there is no alt text either. */
-  noAttachments: '이미지 첨부는 아직 지원하지 않아요. 대체 텍스트도 여기서는 쓸 수 없어요.',
   /** Shown beside the character count once the draft is past the ceiling. */
   overLimit: '너무 길어요',
   /** Announced once when the draft crosses the ceiling; the count itself stays quiet. */

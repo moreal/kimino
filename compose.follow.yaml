@@ -1,0 +1,56 @@
+# Rendered by scripts/c2s-follow-fixture.py into its private fixture directory.
+# This is an explicitly patched ONI experiment, not the stock main fixture.
+name: kimino-c2s-follow
+services:
+  alice:
+    image: "${KIMINO_FOLLOW_IMAGE:-kimino-oni-follow:58be49b-reviewed}"
+    platform: linux/amd64
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    entrypoint: ["/bin/oni", "--path", "/storage"]
+    command: ["run", "--listen", "0.0.0.0:4000", "--url", "https://alice.test:${KIMINO_FOLLOW_PORT:-18448}/", "--pw", "kimino-follow-local-only"]
+    environment:
+      HTTPS: "false"
+      KIMINO_DELIVERY_AUDIT: "1"
+      KIMINO_PRIVATE_MEDIA_CAPABILITY: "1"
+      SSL_CERT_FILE: /probe-ca/root.crt
+      ONI_PROBE_LOCAL_ACTOR: "https://alice.test:${KIMINO_FOLLOW_PORT:-18448}/"
+    volumes:
+      - alice-data:/storage
+      - "${KIMINO_FOLLOW_FIXTURE_DIR:-./.local/c2s-follow}/root.crt:/probe-ca/root.crt:ro"
+  bob:
+    image: "${KIMINO_FOLLOW_IMAGE:-kimino-oni-follow:58be49b-reviewed}"
+    platform: linux/amd64
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 256
+    entrypoint: ["/bin/oni", "--path", "/storage"]
+    command: ["run", "--listen", "0.0.0.0:4000", "--url", "https://bob.test:${KIMINO_FOLLOW_PORT:-18448}/", "--pw", "kimino-follow-local-only"]
+    environment:
+      HTTPS: "false"
+      KIMINO_DELIVERY_AUDIT: "1"
+      KIMINO_PRIVATE_MEDIA_CAPABILITY: "1"
+      SSL_CERT_FILE: /probe-ca/root.crt
+      ONI_PROBE_LOCAL_ACTOR: "https://bob.test:${KIMINO_FOLLOW_PORT:-18448}/"
+    volumes:
+      - bob-data:/storage
+      - "${KIMINO_FOLLOW_FIXTURE_DIR:-./.local/c2s-follow}/root.crt:/probe-ca/root.crt:ro"
+  gateway:
+    image: caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    ports: ["127.0.0.1:${KIMINO_FOLLOW_PORT:-18448}:${KIMINO_FOLLOW_PORT:-18448}"]
+    volumes:
+      - "${KIMINO_FOLLOW_FIXTURE_DIR:-./.local/c2s-follow}/Caddyfile:/etc/caddy/Caddyfile:ro"
+      - caddy-data:/data
+    networks:
+      default:
+        aliases: [alice.test, bob.test]
+      ingress: {}
+networks:
+  default:
+    internal: true
+  ingress: {}
+volumes:
+  alice-data:
+  bob-data:
+  caddy-data:

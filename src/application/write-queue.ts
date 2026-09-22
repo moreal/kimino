@@ -2,6 +2,12 @@ import type { Actor, Timeline } from '../domain/social';
 import { iri } from '../domain/activitystreams';
 import { createGuard } from './guard';
 import { SessionError, toFailure, type SessionFailure, type WriteAction } from './gateway-errors';
+import {
+  TimelineReadCancelled,
+  type TimelineReadController,
+  type TimelineReadOptions,
+  type TimelineReadProgress,
+} from './timeline-read';
 
 export type SessionNotice =
   | 'published'
@@ -38,13 +44,14 @@ export function noticeTiming(action: WriteAction): 'on-write' | 'after-reload' {
 /** The two reads the queue asks of a gateway; the writes themselves are the caller's `perform`. */
 export interface TimelineReader {
   /** The full walk of both collections: what connecting and an explicit refresh do. */
-  loadTimeline(): Promise<Timeline>;
+  loadTimeline(options?: TimelineReadOptions): Promise<Timeline>;
   /** The first page of each collection over `previous`; see `TimelineGateway.loadRecent`. */
   loadRecent(previous: Timeline, touched: readonly string[]): Promise<Timeline>;
 }
 
 /** The part of the session state that reads and writes move; the session adds connection state. */
 export interface ReadState {
+  readonly readBudget?: TimelineReadProgress;
   readonly actor?: Actor;
   readonly timeline?: Timeline;
   /** ISO timestamp of the last successful timeline load, full or partial. */
@@ -95,6 +102,8 @@ export interface WriteQueueHost {
   update: (patch: Partial<ReadState>) => void;
   /** The clock a landed read is stamped with (ISO 8601). */
   now: () => string;
+  /** Per-invocation full reads; omitted by queue-only hosts with no continuation UI. */
+  reads?: TimelineReadController;
 }
 
 /**
@@ -166,7 +175,9 @@ export function createWriteQueue(host: WriteQueueHost) {
         if (!live()) throw new Error('Superseded');
       }
     }
-    return active.loadTimeline();
+    return host.reads
+      ? host.reads.run((options) => active.loadTimeline(options), live)
+      : active.loadTimeline();
   }
 
   /**
@@ -184,6 +195,7 @@ export function createWriteQueue(host: WriteQueueHost) {
     mode: ReadMode,
   ): Promise<void> {
     const generation = reloads.next();
+    host.reads?.cancel();
     owed = false;
     update({ refreshing: true });
     const landing = () => guard.isCurrent(current) && reloads.isCurrent(generation);
@@ -208,7 +220,10 @@ export function createWriteQueue(host: WriteQueueHost) {
           });
         }
       } catch (error) {
-        if (landing()) update({ error: failure(error), refreshing: false, notice: undefined });
+        if (landing()) {
+          if (error instanceof TimelineReadCancelled) update({ ...onLoaded, refreshing: false });
+          else update({ error: failure(error), refreshing: false, notice: undefined });
+        }
       }
     })();
     return reloading;
@@ -245,6 +260,7 @@ export function createWriteQueue(host: WriteQueueHost) {
           // makes the state it would land older than what the server holds.
           if (state().refreshing) {
             reloads.next();
+            host.reads?.cancel();
             owed = true;
           }
           update({ refreshing: false, notice: undefined, error: undefined });
@@ -305,13 +321,15 @@ export function createWriteQueue(host: WriteQueueHost) {
     },
     /**
      * Forgets what was recorded for a session that is over: the reactions let go of and the
-     * objects to read back. A read still owed is forgotten too when `owed` is set - on
-     * disconnect, where nothing follows it.
+     * objects to read back. A read still owed belongs to that session too, even when a
+     * new connection follows immediately.
      */
-    reset(options: { owed?: boolean } = {}) {
+    reset() {
+      reloads.next();
+      host.reads?.cancel();
       withdrawn = new Set();
       touched = new Set();
-      if (options.owed) owed = false;
+      owed = false;
     },
   };
 }

@@ -6,6 +6,7 @@ import { authorHue, isEdited, replyCueText } from '../presentation/note-display'
 import { shareScope } from '../presentation/note-body';
 import { absoluteTime, relativeTime } from '../presentation/time';
 import { copy } from '../presentation/copy';
+import { readingCopy } from '../presentation/copy-reading';
 import { avatarInitial } from '../presentation/view-flags';
 import Icon from './Icons';
 import { useClock } from '../presentation/solid/clock';
@@ -34,6 +35,8 @@ export default function NoteCard(props: {
   parent?: Pick<TimelineNote, 'author' | 'content' | 'summary'>;
   /** The parent is known to be gone: the cue says so and offers no link to a 410. */
   parentGone?: boolean;
+  /** Deliberately hidden locally: neither quote its body nor link around the filter. */
+  parentHidden?: boolean;
   /**
    * The parent is the card drawn right above this one (a conversation column): the cue
    * would only repeat what the eye already sees, so it is left off.
@@ -156,11 +159,15 @@ export default function NoteCard(props: {
             when={props.parent && props.onOpenParent}
             fallback={
               <Show
-                when={parentLink() && !props.parentGone}
+                when={parentLink() && !props.parentGone && !props.parentHidden}
                 fallback={
                   <span class="note-context reply-context">
                     <Icon name="corner-down-right" class="icon--sm" />
-                    {props.parentGone ? copy.parentDeleted : copy.parentUnavailable}
+                    {props.parentHidden
+                      ? readingCopy.hiddenParent
+                      : props.parentGone
+                        ? copy.parentDeleted
+                        : copy.parentUnavailable}
                   </span>
                 }
               >

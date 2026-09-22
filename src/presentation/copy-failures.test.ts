@@ -36,14 +36,11 @@ describe('failure copy', () => {
     ).toMatch(/ActivityPub/);
     expect(failureMessage({ kind: 'no-followers' }).text).toMatch(/팔로워/);
   });
-  it('reports a collection past the page ceiling as a protocol problem, detail kept', () => {
-    // The adapter refuses to truncate a timeline that runs past `maxPages`; that surfaces
-    // as an unexpected response, and the developer detail names the limit behind "자세히".
-    const detail = 'Collection page limit exceeded; timeline would be truncated.';
-    const over = failureMessage({ kind: 'protocol', reason: 'unexpected-response', detail });
-    expect(over.text).toBe('서버 응답이 ActivityPub 형식과 달라요. 서버 설정을 확인해 주세요.');
-    expect(over.detail).toBe(detail);
-    expect(over.text).not.toMatch(/게시됐을 수도/);
+  it('distinguishes a collection limit from a malformed server response', () => {
+    const over = failureMessage({ kind: 'read-limit', reason: 'pages', limit: 100 });
+    expect(over.text).toContain('100페이지');
+    expect(over.text).not.toMatch(/ActivityPub 형식|서버 설정|게시됐을 수도/);
+    expect(over.detail).toBe('');
   });
   it('tells a sample-mode refusal apart by what was attempted', () => {
     const at = (action: 'publish' | 'react' | 'manage') =>

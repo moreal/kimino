@@ -1,6 +1,8 @@
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { Attachment, TimelineNote } from '../domain/social';
 import { safeContent } from '../infrastructure/sanitize';
+import { createImageResource } from '../presentation/image-resource';
+import { useImageRead, createImageObjectUrl } from '../presentation/solid/image-read-context';
 import { contentCopy } from '../presentation/copy';
 import { warnedRevealed } from '../presentation/note-display';
 import { useRevealWarned } from '../presentation/solid/reveal-preference';
@@ -18,8 +20,43 @@ import {
 } from '../presentation/note-body';
 
 /** One attachment row; media is never fetched until the reader asks for it. */
-function AttachmentRow(props: { attachment: Attachment }) {
+function AttachmentRow(props: { attachment: Attachment; noteId: string; restricted: boolean }) {
+  const reader = useImageRead();
+  const protectedRead = () => props.restricted && !!reader?.enabled();
+  const [source, setSource] = createSignal<string>();
   const [loaded, setLoaded] = createSignal(false);
+  const [loading, setLoading] = createSignal(false);
+  const [failed, setFailed] = createSignal(false);
+  let image: HTMLImageElement | undefined;
+  let disposed = false;
+  const resource = createImageResource({
+    load: (signal) => reader!.load(props.noteId, props.attachment.url, signal),
+    createResource: createImageObjectUrl,
+    update: (state) => {
+      image = undefined;
+      setSource(state.url);
+      setLoaded(state.phase === 'loading' || state.phase === 'ready');
+      setLoading(state.phase === 'loading' || state.phase === 'ready');
+      setFailed(state.phase === 'failed');
+    },
+  });
+  const hide = () => {
+    resource.hide();
+    image = undefined;
+    setSource(undefined);
+    setLoaded(false);
+    setLoading(false);
+    setFailed(false);
+  };
+  createEffect(
+    () => [props.attachment.url, props.noteId, protectedRead(), reader?.identity()] as const,
+    () => hide(),
+  );
+  onCleanup(() => {
+    disposed = true;
+    resource.dispose();
+    image = undefined;
+  });
   const alt = () => attachmentAlt(props.attachment);
   return (
     <li class="attachment" data-kind={props.attachment.kind}>
@@ -47,21 +84,67 @@ function AttachmentRow(props: { attachment: Attachment }) {
             </a>
           }
         >
-          <Show when={!loaded()}>
-            <button type="button" class="attachment-action" onClick={() => setLoaded(true)}>
-              {contentCopy.loadImage}
-            </button>
-          </Show>
+          <button
+            type="button"
+            class="attachment-action"
+            onClick={() => {
+              if (loaded()) {
+                hide();
+                return;
+              }
+              if (protectedRead()) {
+                void resource.show();
+              } else {
+                setFailed(false);
+                setLoading(true);
+                setSource(props.attachment.url);
+                setLoaded(true);
+              }
+            }}
+          >
+            {loaded()
+              ? contentCopy.hideImage
+              : failed()
+                ? contentCopy.retryImage
+                : contentCopy.loadImage}
+          </button>
         </Show>
       </div>
-      <Show when={props.attachment.kind === 'image' && loaded()}>
+      <Show when={failed()}>
+        <p class="attachment-error" role="alert">
+          {contentCopy.imageFailed}
+        </p>
+      </Show>
+      <Show when={loading()}>
+        <p class="attachment-status" role="status">
+          {contentCopy.imageLoading}
+        </p>
+      </Show>
+      <Show when={props.attachment.kind === 'image' && loaded() && source()}>
         <img
           class="attachment-image"
-          src={props.attachment.url}
+          src={source()}
           alt={props.attachment.alt ?? ''}
           loading="lazy"
           decoding="async"
           referrerpolicy="no-referrer"
+          ref={(element) => {
+            image = element;
+          }}
+          onLoad={(event) => {
+            if (!disposed && event.currentTarget === image) setLoading(false);
+          }}
+          onError={(event) => {
+            if (disposed || event.currentTarget !== image) return;
+            if (protectedRead()) resource.failed(source());
+            else {
+              image = undefined;
+              setSource(undefined);
+              setLoading(false);
+              setLoaded(false);
+              setFailed(true);
+            }
+          }}
         />
       </Show>
     </li>
@@ -92,7 +175,15 @@ export default function NoteBody(props: {
           aria-label={contentCopy.attachmentsLabel(attachmentSummary(props.note.attachments))}
         >
           <For each={props.note.attachments}>
-            {(attachment) => <AttachmentRow attachment={attachment} />}
+            {(attachment) => (
+              <AttachmentRow
+                attachment={attachment}
+                noteId={props.note.id}
+                restricted={
+                  props.note.visibility !== 'public' && props.note.visibility !== 'unlisted'
+                }
+              />
+            )}
           </For>
         </ul>
       </Show>

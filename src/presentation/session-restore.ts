@@ -7,6 +7,8 @@ import { savePreviewLinks } from './saved-links';
 export interface StoredSession {
   actorUrl: string;
   token: string;
+  /** Explicit server-specific upload opt-in, never inferred from an actor. */
+  mediaMode?: 'oni';
   view: FeedView;
   /** Preview-only: saved note IRIs, so a reload keeps them and closing the tab clears them. */
   saved?: string[];
@@ -28,7 +30,7 @@ const isFeedView = (value: unknown): value is FeedView =>
 /** Validates a parsed JSON value into a stored session, or nothing. */
 export function parseStoredSession(value: unknown): StoredSession | undefined {
   if (!value || typeof value !== 'object') return;
-  const { actorUrl, token, view, saved, thread } = value as Record<string, unknown>;
+  const { actorUrl, token, mediaMode, view, saved, thread } = value as Record<string, unknown>;
   if (typeof actorUrl !== 'string' || !actorUrl || typeof token !== 'string') return;
   const ids = Array.isArray(saved)
     ? saved.filter((id): id is string => typeof id === 'string')
@@ -36,6 +38,7 @@ export function parseStoredSession(value: unknown): StoredSession | undefined {
   return {
     actorUrl,
     token,
+    ...(mediaMode === 'oni' ? { mediaMode } : {}),
     view: isFeedView(view) ? view : 'all',
     ...(ids.length ? { saved: ids } : {}),
     ...(typeof thread === 'string' && thread ? { thread } : {}),
@@ -84,7 +87,7 @@ export interface PersistedFeed {
     view: FeedView;
     all: readonly TimelineNote[];
   };
-  connect(url: string, token: string, remember?: boolean): Promise<void>;
+  connect(url: string, token: string, remember?: boolean, mediaMode?: 'oni'): Promise<void>;
   explore(): Promise<void>;
   navigate(view: FeedView): void;
   setSaved(ids: string[]): void;
@@ -126,7 +129,7 @@ export function createPersistence(feed: PersistedFeed, store: SessionStore) {
       if (!stored) return;
       if (stored.actorUrl === DEMO_ACTOR) await feed.explore();
       // A restored tab already opted in, so it is never reminded that it did not.
-      else await feed.connect(stored.actorUrl, stored.token, true);
+      else await feed.connect(stored.actorUrl, stored.token, true, stored.mediaMode);
       const snapshot = feed.getSnapshot();
       if (!snapshot.actor) return;
       if (snapshot.demo && stored.saved?.length) feed.setSaved(stored.saved);
@@ -173,13 +176,18 @@ export function createPersistence(feed: PersistedFeed, store: SessionStore) {
       if (feed.getSnapshot().demo) store.write({ actorUrl: DEMO_ACTOR, token: '', view: 'all' });
     },
     /** `remember` opts this tab in; the record is written only once the account connected. */
-    async connect(url: string, token: string, remember: boolean) {
+    async connect(url: string, token: string, remember: boolean, mediaMode?: 'oni') {
       remembered = remember;
       store.clear();
-      await feed.connect(url, token, remember);
+      await feed.connect(url, token, remember, mediaMode);
       const snapshot = feed.getSnapshot();
       if (remember && snapshot.actor && !snapshot.demo)
-        store.write({ actorUrl: url, token, view: snapshot.view });
+        store.write({
+          actorUrl: url,
+          token,
+          view: snapshot.view,
+          ...(mediaMode ? { mediaMode } : {}),
+        });
     },
   };
 }

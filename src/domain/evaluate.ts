@@ -1,6 +1,7 @@
 import type { ASObject, Evaluation, NoteReaction, TimelineNote } from './social';
-import { record, str, iri, isType, kind, sameOrigin } from './activitystreams';
+import { record, str, iri, isType, kind, sameOrigin, NS } from './activitystreams';
 import { inferVisibility, normalizeAttachments, recipients } from './note-content';
+import { normalizeFollowTarget } from './relationships';
 
 interface EvaluateOptions {
   /** The followers collection of an author when known (usually only the session actor). */
@@ -71,19 +72,20 @@ export function ownReaction(
 function toNote(value: ASObject, options: EvaluateOptions): TimelineNote | undefined {
   const id = iri(value),
     author = iri(value.attributedTo);
+  if (!isType(value, 'Note') || !id || !author || !sameOrigin(id, author)) return undefined;
+  const attachments = normalizeAttachments(value.attachment);
+  // ONI omits empty content on attachment-only Notes. A missing body is usable only
+  // when safe attachment normalization retained something; malformed bodies still fail.
   if (
-    !isType(value, 'Note') ||
-    !id ||
-    !author ||
-    !sameOrigin(id, author) ||
-    typeof value.content !== 'string'
+    typeof value.content !== 'string' &&
+    (value.content !== undefined || attachments.length === 0)
   )
     return undefined;
   const mentioned = mentions(value.tag);
   return {
     id,
     author,
-    content: value.content,
+    content: value.content ?? '',
     summary: summaryOf(value.summary),
     visibility: inferVisibility(
       recipients(value.to),
@@ -91,7 +93,7 @@ function toNote(value: ASObject, options: EvaluateOptions): TimelineNote | undef
       options.followersOf?.(author),
       [author, ...mentioned, ...(options.self ? [options.self] : [])],
     ),
-    attachments: normalizeAttachments(value.attachment),
+    attachments,
     published: str(value.published),
     updated: str(value.updated),
     inReplyTo: iri(value.inReplyTo),
@@ -123,9 +125,106 @@ interface Reaction {
   actor: string;
   note: string;
 }
+const safeActivityIri = (value: unknown) => {
+  const raw = iri(value);
+  return raw ? normalizeFollowTarget(raw, '') : undefined;
+};
+const onlyType = (value: ASObject, type: string) => {
+  const types = Array.isArray(value.type) ? value.type : [value.type];
+  return types.length > 0 && types.every((t) => t === type || t === NS + type);
+};
+/** Own upload metadata is valid activity evidence, but never a standalone timeline card. */
+function ownRasterImageCreate(activity: ASObject, self?: string): boolean {
+  if (
+    !self ||
+    !onlyType(activity, 'Create') ||
+    !record(activity.object) ||
+    !onlyType(activity.object, 'Image')
+  )
+    return false;
+  const expected = safeActivityIri(self),
+    actor = safeActivityIri(activity.actor);
+  const id = safeActivityIri(str(activity.id)),
+    imageId = safeActivityIri(str(activity.object.id));
+  return (
+    !!expected &&
+    actor === expected &&
+    safeActivityIri(activity.object.attributedTo) === expected &&
+    !!id &&
+    !!imageId &&
+    sameOrigin(id, expected) &&
+    sameOrigin(imageId, expected) &&
+    ['image/png', 'image/jpeg', 'image/webp'].includes(str(activity.object.mediaType) ?? '')
+  );
+}
+function followIdentity(value: ASObject) {
+  const id = safeActivityIri(value.id),
+    actor = safeActivityIri(value.actor),
+    target = safeActivityIri(value.object);
+  return onlyType(value, 'Follow') &&
+    id &&
+    actor &&
+    target &&
+    target !== actor &&
+    sameOrigin(id, actor)
+    ? { id, actor, target }
+    : undefined;
+}
+/** Undefined means this is not relationship evidence; false must never fall through to reactions. */
+function relationshipUndo(
+  activity: ASObject,
+  originals: Map<string, ASObject[]>,
+): boolean | undefined {
+  const embedded = record(activity.object) ? activity.object : undefined;
+  const id = safeActivityIri(activity.object);
+  const loaded = id ? (originals.get(id) ?? []) : [];
+  if (!(embedded && isType(embedded, 'Follow')) && !loaded.some((item) => isType(item, 'Follow')))
+    return undefined;
+  const original = loaded.find((item) => isType(item, 'Follow')) ?? embedded;
+  const expected = original ? followIdentity(original) : undefined;
+  const actor = safeActivityIri(activity.actor);
+  const undoId = safeActivityIri(activity.id);
+  if (
+    !expected ||
+    !onlyType(activity, 'Undo') ||
+    actor !== expected.actor ||
+    (activity.id !== undefined && (!undoId || !sameOrigin(undoId, actor)))
+  )
+    return false;
+  // Consult every original input row, before timeline deduplication can hide an ID conflict.
+  if (
+    loaded.some((item) => {
+      const candidate = followIdentity(item);
+      return (
+        !candidate || candidate.actor !== expected.actor || candidate.target !== expected.target
+      );
+    })
+  )
+    return false;
+  if (embedded) {
+    if (embedded.type !== undefined && !onlyType(embedded, 'Follow')) return false;
+    if (safeActivityIri(embedded.id) !== expected.id) return false;
+    if (
+      ('actor' in embedded || embedded.type !== undefined) &&
+      safeActivityIri(embedded.actor) !== expected.actor
+    )
+      return false;
+    if (
+      ('object' in embedded || embedded.type !== undefined) &&
+      safeActivityIri(embedded.object) !== expected.target
+    )
+      return false;
+  }
+  return true;
+}
 /** A deterministic snapshot evaluator for the compact ActivityStreams subset documented in README.md. */
 export function evaluateActivities(input: ASObject[], options: EvaluateOptions = {}): Evaluation {
   const diagnostics = { ignored: 0, rejected: 0 };
+  const originals = new Map<string, ASObject[]>();
+  for (const activity of input) {
+    const id = safeActivityIri(activity.id);
+    if (id) originals.set(id, [...(originals.get(id) ?? []), activity]);
+  }
   const unique = new Map<string, ASObject>();
   // Resolve conflicting repeated activity IDs consistently, independent of page order.
   for (const activity of [...input].sort((a, b) => compare(stable(a), stable(b)))) {
@@ -149,6 +248,11 @@ export function evaluateActivities(input: ASObject[], options: EvaluateOptions =
       continue;
     }
     if (!['Create', 'Note', 'Announce'].includes(type)) continue;
+    if (type === 'Create' && record(a.object) && isType(a.object, 'Image')) {
+      if (ownRasterImageCreate(a, options.self)) diagnostics.ignored++;
+      else diagnostics.rejected++;
+      continue;
+    }
     const object = type === 'Note' ? a : a.object;
     const n = record(object) ? toNote(object, options) : undefined;
     const actor = iri(a.actor);
@@ -263,6 +367,12 @@ export function evaluateActivities(input: ASObject[], options: EvaluateOptions =
       if (id && notes.get(id)?.author === actor) deleted.add(id);
       else if (!withdraw(id, actor)) diagnostics.rejected++;
     } else if (type === 'Undo') {
+      const relationship = relationshipUndo(a, originals);
+      if (relationship !== undefined) {
+        if (relationship) diagnostics.ignored++;
+        else diagnostics.rejected++;
+        continue;
+      }
       // Only the reacting actor may withdraw its own Announce or Like.
       if (!withdraw(id, actor)) diagnostics.rejected++;
     }

@@ -65,7 +65,7 @@ export default function ContextColumn(props: {
             title={syncSummary(
               props.state.loadedAt,
               props.state.timeline?.diagnostics.ignored,
-              undefined,
+              now(),
               props.state.timeline?.partial,
             )}
           >

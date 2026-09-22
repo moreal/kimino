@@ -1,0 +1,623 @@
+--- a/client_to_server.go
++++ b/client_to_server.go
+@@ -85,20 +85,41 @@
+ // Additional recommendation from the ActivityPub mailing list: Activities addressed to `Public` usually appear
+ // only in the inboxes of actors that follow the activity's `actor` property.
+ func (p *P) ProcessOutboxDelivery(it vocab.Item, receivedIn vocab.IRI) error {
++	audit := startProbeDeliveryAudit(it)
++	defer audit.finish()
+ 	recipients := p.BuildOutboxRecipientsList(it, receivedIn)
++	if audit != nil {
++		for _, recipient := range recipients {
++			if !p.IsLocal(recipient) {
++				audit.remoteTargets++
++			}
++		}
++	}
+ 	if len(recipients) == 0 {
++		if audit != nil {
++			audit.completed = true
++		}
+ 		return nil
+ 	}
+ 
+ 	// NOTE(marius): this accumulates the InReplyTo targets for the current activity
+ 	replyToCollections := p.BuildReplyToCollections(it)
+ 	if err := p.AddToLocalCollections(it, append(recipients, replyToCollections...)...); err != nil {
++		if audit != nil {
++			audit.localFailed = true
++		}
+ 		p.l.WithContext(lw.Ctx{"err": err}).Errorf("unable to add to local collections")
+ 	}
+ 	if err := p.AddToRemoteCollections(it, recipients...); err != nil {
++		if audit != nil {
++			audit.remoteFailed = true
++		}
+ 		p.l.WithContext(lw.Ctx{"err": err}).Errorf("unable to add to remote collections")
+ 	}
+ 
++	if audit != nil {
++		audit.completed = true
++	}
+ 	return nil
+ }
+ 
+@@ -310,7 +331,26 @@
+ 				continue
+ 			}
+ 
++			expandedFollowers := false
++			if _, kind := vocab.Split(recIRI); kind == vocab.Followers && p.IsLocalIRI(recIRI) {
++				_ = vocab.OnCollectionIntf(recipient, func(col vocab.CollectionInterface) error {
++					recipient = col.Collection()
++					expandedFollowers = true
++					return nil
++				})
++			}
+ 			_ = vocab.OnItem(recipient, func(rec vocab.Item) error {
++				if expandedFollowers {
++					if vocab.IsIRI(rec) {
++						var err error
++						if rec, err = p.DereferenceItem(rec); err != nil {
++							return nil
++						}
++					}
++					if vocab.IsNil(rec) || rec.GetLink().Equal(actor.GetLink()) || actorHasBlocked(rec) {
++						return nil
++					}
++				}
+ 				recipientHasBlocked := p.actorHasBlockedFn(rec)
+ 				if recipientHasBlocked(act.Actor) {
+ 					p.l.WithContext(lw.Ctx{"actor": act.Actor.GetID(), "rec": recIRI}).Tracef("Skipping blocked actor blocked by recipient")
+--- a/server_to_server.go
++++ b/server_to_server.go
+@@ -52,6 +52,23 @@
+ 		return nil, errors.Newf("Unable to process nil Activity")
+ 	}
+ 
++	// Probe-only: authenticate a cached Follow before saving any incoming Undo properties.
++	if vocab.UndoType.Match(it.GetType()) {
++		if err := p.validateIncomingFollowUndo(it, author); err != nil {
++			return it, err
++		}
++		undo, _ := vocab.ToActivity(it)
++		if undo != nil && !vocab.IsNil(undo.Object) && vocab.FollowType.Match(undo.Object.GetType()) {
++			if previous, err := p.s.Load(undo.GetID()); err == nil && !vocab.IsNil(previous) {
++				applied, err := vocab.ToActivity(previous)
++				if err != nil || !vocab.UndoType.Match(applied.Type) || vocab.IsNil(applied.Actor) || vocab.IsNil(applied.Object) || !applied.Actor.GetID().Equal(author.ID) || !applied.Object.GetID().Equal(undo.Object.GetID()) {
++					return it, errors.BadRequestf("stored Undo differs from incoming activity")
++				}
++				// Do not apply an old Undo again after a later Follow recreated membership.
++				return previous, nil
++			}
++		}
++	}
+ 	var err error
+ 	if vocab.IntransitiveActivityTypes.Match(it.GetType()) {
+ 		err = vocab.OnIntransitiveActivity(it, p.dereferenceIntransitiveActivityProperties(receivedIn))
+@@ -333,6 +350,8 @@
+ 		act, err = DeleteActivity(p.s, act)
+ 	case vocab.ReactionsActivityTypes.Match(typ):
+ 		act, err = p.ReactionsActivity(act, receivedIn)
++	case vocab.UndoType.Match(typ) && !vocab.IsNil(act.Object) && vocab.FollowType.Match(act.Object.GetType()):
++		act, err = p.NegatingActivity(act)
+ 	}
+ 	return act, err
+ }
+--- a/negating.go
++++ b/negating.go
+@@ -114,3 +114,47 @@
+ 	}
+ 	return err
+ }
++
++// validateIncomingFollowUndo is a probe-scoped guard for Undo of a stored Follow.
++// Other stored activity types retain the previous unsupported dispatch behavior.
++func (p P) validateIncomingFollowUndo(it vocab.Item, author vocab.Actor) error {
++	return vocab.OnActivity(it, func(undo *vocab.Activity) error {
++		if vocab.IsNil(undo.Object) || undo.Object.GetID() == "" {
++			return errors.BadRequestf("missing original activity")
++		}
++		// Embedded non-Follow Undo stays on the existing unsupported path.
++		if !vocab.IsIRI(undo.Object) && !vocab.FollowType.Match(undo.Object.GetType()) {
++			return nil
++		}
++		stored, err := p.s.Load(undo.Object.GetID())
++		if err != nil || vocab.IsNil(stored) {
++			return errors.BadRequestf("original activity is not cached")
++		}
++		if !vocab.FollowType.Match(stored.GetType()) {
++			if vocab.FollowType.Match(undo.Object.GetType()) {
++				return errors.BadRequestf("original is not a Follow")
++			}
++			return nil
++		}
++		return vocab.OnActivity(stored, func(follow *vocab.Activity) error {
++			if vocab.IsNil(undo.Actor) || vocab.IsNil(follow.Actor) || !undo.Actor.GetID().Equal(author.ID) || !follow.Actor.GetID().Equal(author.ID) {
++				return errors.BadRequestf("Undo actor does not own stored Follow")
++			}
++			if !vocab.IsIRI(undo.Object) {
++				if !vocab.FollowType.Match(undo.Object.GetType()) {
++					return errors.BadRequestf("embedded original type differs")
++				}
++				if err := vocab.OnActivity(undo.Object, func(supplied *vocab.Activity) error {
++					if vocab.IsNil(supplied.Actor) || !supplied.Actor.GetID().Equal(follow.Actor.GetID()) {
++						return errors.BadRequestf("embedded original actor differs")
++					}
++					return nil
++				}); err != nil {
++					return err
++				}
++			}
++			undo.Object = follow
++			return p.ValidateClientNegatingActivity(undo)
++		})
++	})
++}
+--- /dev/null
++++ b/kimino_probe_test.go
+@@ -0,0 +1,193 @@
++package processing
++
++import (
++	v "github.com/go-ap/activitypub"
++	"sync"
++	"testing"
++)
++
++func probeActor(id v.IRI) *v.Actor {
++	return &v.Actor{ID: id, Type: v.ApplicationType, Inbox: v.Inbox.Of(id), Outbox: v.Outbox.Of(id), Followers: v.Followers.Of(id), Following: v.Following.Of(id)}
++}
++func TestKiminoLocalFollowersExpansion(t *testing.T) {
++	for _, iriMember := range []bool{false, true} {
++		t.Run(map[bool]string{false: "embedded", true: "IRI"}[iriMember], func(t *testing.T) {
++			st := mockStore{&sync.Map{}}
++			bob := probeActor("https://bob.test/")
++			alice := probeActor("https://alice.test/")
++			blocked := probeActor("https://blocked.test/")
++			shared := probeActor("https://shared.test/")
++			shared.Endpoints = &v.Endpoints{SharedInbox: v.IRI("https://shared.test/shared-inbox")}
++			for _, a := range []*v.Actor{bob, alice, blocked, shared} {
++				st.Save(a)
++			}
++			members := v.ItemCollection{alice, blocked, bob, shared}
++			if iriMember {
++				members = v.ItemCollection{alice.ID, blocked.ID, bob.ID, shared.ID}
++			}
++			st.Save(&v.OrderedCollection{ID: v.Followers.IRI(bob), Type: v.OrderedCollectionType, OrderedItems: members})
++			st.Save(&v.OrderedCollection{ID: BlockedCollection.IRI(bob), Type: v.OrderedCollectionType, OrderedItems: v.ItemCollection{blocked.ID}})
++			p := New(WithStorage(st), WithIRI(bob.ID))
++			act := &v.Activity{ID: "https://bob.test/outbox/note", Type: v.CreateType, Actor: bob, To: v.ItemCollection{v.PublicNS}, CC: v.ItemCollection{v.Followers.IRI(bob)}, Object: &v.Object{Type: v.NoteType}}
++			got := p.BuildOutboxRecipientsList(act, v.Outbox.IRI(bob))
++			if !got.Contains(alice.Inbox) {
++				t.Error("followers actor inbox missing")
++			}
++			if !got.Contains(shared.Endpoints.SharedInbox) {
++				t.Error("public shared inbox missing")
++			}
++			if got.Contains(blocked.Inbox) {
++				t.Error("blocked follower included")
++			}
++			act.To = nil
++			private := p.BuildOutboxRecipientsList(act, v.Outbox.IRI(bob))
++			if private.Contains(bob.Inbox) {
++				t.Error("self follower included")
++			}
++			if !private.Contains(shared.Inbox) {
++				t.Error("nonpublic follower inbox missing")
++			}
++			if private.Contains(shared.Endpoints.SharedInbox) {
++				t.Error("nonpublic shared inbox used")
++			}
++		})
++	}
++}
++
++type probeStore struct {
++	mockStore
++	saves, removes int
++	removed        []v.IRI
++}
++
++func (s *probeStore) Save(x v.Item) (v.Item, error) { s.saves++; return s.mockStore.Save(x) }
++func (s *probeStore) RemoveFrom(c v.IRI, x ...v.Item) error {
++	s.removes++
++	s.removed = append(s.removed, c)
++	it, err := s.Load(c)
++	if err != nil {
++		return err
++	}
++	return v.OnOrderedCollection(it, func(col *v.OrderedCollection) error {
++		kept := make(v.ItemCollection, 0, len(col.OrderedItems))
++		for _, member := range col.OrderedItems {
++			remove := false
++			for _, target := range x {
++				if member.GetID().Equal(target.GetID()) {
++					remove = true
++				}
++			}
++			if !remove {
++				kept = append(kept, member)
++			}
++		}
++		col.OrderedItems = kept
++		return nil
++	})
++}
++func TestKiminoIncomingUndoKnownFollow(t *testing.T) {
++	for _, kind := range []string{"valid", "valid_iri", "wrong_authenticated_actor", "spoofed_embedded_actor", "missing_original", "wrong_original_type", "unsupported_like", "unsupported_like_missing"} {
++		t.Run(kind, func(t *testing.T) {
++			s := &probeStore{mockStore: mockStore{&sync.Map{}}}
++			bob := probeActor("https://bob.test/")
++			alice := probeActor("https://alice.test/")
++			mallory := probeActor("https://mallory.test/")
++			for _, a := range []*v.Actor{bob, alice, mallory} {
++				s.mockStore.Save(a)
++			}
++			followers := &v.OrderedCollection{ID: v.Followers.IRI(bob), Type: v.OrderedCollectionType, OrderedItems: v.ItemCollection{alice}}
++			s.mockStore.Save(followers)
++			s.mockStore.Save(&v.OrderedCollection{ID: v.Inbox.IRI(bob), Type: v.OrderedCollectionType})
++			original := &v.Activity{ID: "https://alice.test/outbox/follow", Type: v.FollowType, Actor: alice, Object: bob, To: v.ItemCollection{bob.ID}}
++			if kind == "wrong_original_type" || kind == "unsupported_like" || kind == "unsupported_like_missing" {
++				original.Type = v.LikeType
++			}
++			if kind != "missing_original" && kind != "unsupported_like_missing" {
++				s.mockStore.Save(original)
++			}
++			embedded := *original
++			if kind == "wrong_original_type" {
++				embedded.Type = v.FollowType
++			}
++			author := *alice
++			undoActor := v.Item(alice)
++			if kind == "wrong_authenticated_actor" {
++				author = *mallory
++				undoActor = mallory
++			}
++			if kind == "spoofed_embedded_actor" {
++				embedded.Actor = mallory
++				author = *mallory
++				undoActor = mallory
++			}
++			var object v.Item = &embedded
++			if kind == "valid_iri" {
++				object = original.ID
++			}
++			undo := &v.Activity{ID: "https://alice.test/outbox/undo", Type: v.UndoType, Actor: undoActor, Object: object, To: v.ItemCollection{bob.ID}}
++			p := New(WithStorage(s), WithIRI(bob.ID))
++			_, err := p.ProcessServerActivity(undo, author, v.Inbox.IRI(bob))
++			if kind == "unsupported_like" || kind == "unsupported_like_missing" {
++				if err != nil || s.removes != 0 || !followers.Contains(alice) {
++					t.Fatal("unsupported Undo behavior changed")
++				}
++				return
++			}
++			if kind == "valid" || kind == "valid_iri" {
++				if err != nil {
++					t.Fatal(err)
++				}
++				if followers.Contains(alice) {
++					t.Errorf("incoming Undo did not remove follower; removes=%d saves=%d objectType=%s cols=%v", s.removes, s.saves, undo.Object.GetType(), s.removed)
++				}
++			} else {
++				if err == nil {
++					t.Error("invalid incoming Undo accepted")
++				}
++				if s.saves != 0 || s.removes != 0 {
++					t.Errorf("mutation before rejection: saves=%d removes=%d", s.saves, s.removes)
++				}
++				if !followers.Contains(alice) {
++					t.Error("invalid Undo removed follower")
++				}
++			}
++		})
++	}
++}
++
++func TestKiminoReplayedUndoDoesNotRemoveNewFollow(t *testing.T) {
++	s := &probeStore{mockStore: mockStore{&sync.Map{}}}
++	bob := probeActor("https://bob.test/")
++	alice := probeActor("https://alice.test/")
++	s.mockStore.Save(bob)
++	s.mockStore.Save(alice)
++	followers := &v.OrderedCollection{ID: v.Followers.IRI(bob), Type: v.OrderedCollectionType, OrderedItems: v.ItemCollection{alice}}
++	s.mockStore.Save(followers)
++	s.mockStore.Save(&v.OrderedCollection{ID: v.Inbox.IRI(bob), Type: v.OrderedCollectionType})
++	f1 := &v.Activity{ID: "https://alice.test/outbox/f1", Type: v.FollowType, Actor: alice, Object: bob, To: v.ItemCollection{bob.ID}}
++	s.mockStore.Save(f1)
++	p := New(WithStorage(s), WithIRI(bob.ID))
++	u1 := &v.Activity{ID: "https://alice.test/outbox/u1", Type: v.UndoType, Actor: alice, Object: f1, To: v.ItemCollection{bob.ID}}
++	if _, err := p.ProcessServerActivity(u1, *alice, v.Inbox.IRI(bob)); err != nil {
++		t.Fatal(err)
++	}
++	if followers.Contains(alice) {
++		t.Fatal("first Undo failed")
++	}
++	f2 := &v.Activity{ID: "https://alice.test/outbox/f2", Type: v.FollowType, Actor: alice, Object: bob, To: v.ItemCollection{bob.ID}}
++	s.mockStore.Save(f2)
++	if _, err := AcceptActivity(p, &v.Activity{Type: v.AcceptType, Actor: bob, Object: f2}, v.Outbox.IRI(bob)); err != nil {
++		t.Fatal(err)
++	}
++	if !followers.Contains(alice) {
++		t.Fatal("second Follow was not accepted")
++	}
++	before := s.removes
++	replay := &v.Activity{ID: u1.ID, Type: v.UndoType, Actor: alice, Object: f1.ID, To: v.ItemCollection{bob.ID}}
++	if _, err := p.ProcessServerActivity(replay, *alice, v.Inbox.IRI(bob)); err != nil {
++		t.Fatal(err)
++	}
++	if !followers.Contains(alice) || s.removes != before {
++		t.Fatal("replayed old Undo removed new Follow membership")
++	}
++}
+--- /dev/null
++++ b/kimino_withdrawal_test.go
+@@ -0,0 +1,153 @@
++package processing
++
++import (
++	"context"
++	"fmt"
++	v "github.com/go-ap/activitypub"
++	"sync"
++	"testing"
++)
++
++type withdrawalCall struct {
++	target v.IRI
++	item   v.Item
++}
++type withdrawalTransport struct {
++	store    ReadStore
++	mu       sync.Mutex
++	calls    []withdrawalCall
++	failures int
++}
++
++func (c *withdrawalTransport) LoadIRI(i v.IRI) (v.Item, error) { return c.store.Load(i) }
++func (c *withdrawalTransport) CtxLoadIRI(_ context.Context, i v.IRI) (v.Item, error) {
++	return c.LoadIRI(i)
++}
++func (c *withdrawalTransport) ToCollection(i v.Item, to ...v.IRI) (v.IRI, v.Item, error) {
++	return c.CtxToCollection(context.Background(), i, to...)
++}
++func (c *withdrawalTransport) CtxToCollection(_ context.Context, i v.Item, to ...v.IRI) (v.IRI, v.Item, error) {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	data, err := v.MarshalJSON(i)
++	if err != nil {
++		c.failures++
++		return "", nil, err
++	}
++	copy, err := v.UnmarshalJSON(data)
++	if err != nil {
++		c.failures++
++		return "", nil, err
++	}
++	for _, target := range to {
++		c.calls = append(c.calls, withdrawalCall{target, copy})
++	}
++	return i.GetLink(), copy, nil
++}
++func (c *withdrawalTransport) matching(id, target v.IRI) []v.Item {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	var out []v.Item
++	for _, call := range c.calls {
++		if call.target == target && call.item.GetLink() == id {
++			out = append(out, call.item)
++		}
++	}
++	return out
++}
++
++func TestKiminoSynchronousFollowWithdrawalDelivery(t *testing.T) {
++	alice, bob := probeActor("https://alice.test/"), probeActor("https://bob.test/")
++	setup := func(owner *v.Actor) (*P, *probeStore, *withdrawalTransport) {
++		s := &probeStore{mockStore: mockStore{&sync.Map{}}}
++		for _, a := range []*v.Actor{alice, bob} {
++			s.Save(a)
++		}
++		for _, path := range []v.CollectionPath{v.Inbox, v.Outbox, v.Followers, v.Following} {
++			s.Save(&v.OrderedCollection{ID: path.IRI(owner), Type: v.OrderedCollectionType})
++		}
++		c := &withdrawalTransport{store: s}
++		p := New(WithStorage(s), WithIRI(owner.ID), WithClient(c), WithDisseminationRetryCount(0))
++		if p.async {
++			t.Fatal("completion assertions require synchronous processing")
++		}
++		return p, s, c
++	}
++	pa, sa, ca := setup(alice)
++	pb, sb, cb := setup(bob)
++	submit := func(p *P, owner *v.Actor, a *v.Activity) {
++		t.Helper()
++		if _, err := p.ProcessClientActivity(a, *owner, v.Outbox.IRI(owner)); err != nil {
++			t.Fatalf("client %s failed: %v", a.Type, err)
++		}
++	}
++	receive := func(c *withdrawalTransport, p *P, author, owner *v.Actor, id v.IRI) {
++		t.Helper()
++		calls := c.matching(id, v.Inbox.IRI(owner))
++		if len(calls) != 1 {
++			t.Fatalf("delivery count=%d want=1", len(calls))
++		}
++		if _, err := p.ProcessServerActivity(calls[0], *author, v.Inbox.IRI(owner)); err != nil {
++			t.Fatalf("server processing failed: %v", err)
++		}
++	}
++	member := func(s *probeStore, col v.IRI, item v.IRI) bool {
++		t.Helper()
++		got, err := s.Load(col)
++		if err != nil {
++			t.Fatal(err)
++		}
++		found := false
++		if err := v.OnCollectionIntf(got, func(c v.CollectionInterface) error {
++			for _, member := range c.Collection() {
++				if member.GetLink().Equal(item) {
++					found = true
++				}
++			}
++			return nil
++		}); err != nil {
++			t.Fatal(err)
++		}
++		return found
++	}
++	follow := &v.Activity{ID: "https://alice.test/activities/follow", Type: v.FollowType, Actor: alice, Object: bob, To: v.ItemCollection{bob.ID}}
++	submit(pa, alice, follow)
++	receive(ca, pb, alice, bob, follow.ID)
++	accept := &v.Activity{ID: "https://bob.test/activities/accept", Type: v.AcceptType, Actor: bob, Object: follow.ID, To: v.ItemCollection{alice.ID}}
++	submit(pb, bob, accept)
++	receive(cb, pa, bob, alice, accept.ID)
++	if !member(sa, v.Following.IRI(alice), bob.ID) || !member(sb, v.Followers.IRI(bob), alice.ID) {
++		t.Fatalf("Accept graph membership following=%t followers=%t", member(sa, v.Following.IRI(alice), bob.ID), member(sb, v.Followers.IRI(bob), alice.ID))
++	}
++	note := func(suffix string) *v.Activity {
++		return &v.Activity{ID: v.ID("https://bob.test/activities/" + suffix), Type: v.CreateType, Actor: bob, To: v.ItemCollection{v.Followers.IRI(bob)}, Object: &v.Object{ID: v.ID("https://bob.test/notes/" + suffix), Type: v.NoteType, AttributedTo: bob.ID, MediaType: "text/html", Content: v.NaturalLanguageValues{v.NilLangRef: v.Content("Synthetic fixture text")}, To: v.ItemCollection{v.Followers.IRI(bob)}}}
++	}
++	before := note("before")
++	submit(pb, bob, before)
++	receive(cb, pa, bob, alice, before.ID)
++	if !member(sa, v.Inbox.IRI(alice), before.ID) {
++		t.Fatal("baseline followers-only text did not reach Alice inbox")
++	}
++	undo := &v.Activity{ID: "https://alice.test/activities/undo", Type: v.UndoType, Actor: alice, Object: follow.ID, To: v.ItemCollection{bob.ID}}
++	submit(pa, alice, undo)
++	receive(ca, pb, alice, bob, undo.ID)
++	// Continue to the second send even if the graph assertion fails, so the
++	// mutation test proves both graph evidence and transport non-delivery.
++	if member(sa, v.Following.IRI(alice), bob.ID) || member(sb, v.Followers.IRI(bob), alice.ID) {
++		t.Error("exact Undo left graph membership")
++	}
++	after := note("after")
++	submit(pb, bob, after)
++	if got := len(cb.matching(after.ID, v.Inbox.IRI(alice))); got != 0 {
++		t.Errorf("completed post-Undo routing called Alice %d times", got)
++	}
++	if !member(sb, v.Outbox.IRI(bob), after.ID) {
++		t.Error("post-Undo activity did not complete local outbox dissemination")
++	}
++	if member(sa, v.Inbox.IRI(alice), after.ID) {
++		t.Error("post-Undo activity appeared in Alice inbox")
++	}
++	if ca.failures+cb.failures != 0 {
++		t.Fatal(fmt.Sprintf("recording transport failures=%d", ca.failures+cb.failures))
++	}
++}
+--- /dev/null
++++ b/probe_delivery_audit.go
+@@ -0,0 +1,62 @@
++package processing
++
++import (
++	"crypto/sha256"
++	"encoding/hex"
++	"encoding/json"
++	vocab "github.com/go-ap/activitypub"
++	"io"
++	"os"
++	"sync"
++)
++
++// Local fixture diagnostics only. Never emit source IRIs, content or errors.
++var probeDeliveryOutput sync.Mutex
++
++type probeDeliveryAudit struct {
++	output                               io.Writer
++	activityHash, objectHash             string
++	remoteTargets                        int
++	localFailed, remoteFailed, completed bool
++}
++
++func newProbeDeliveryAudit(it vocab.Item, output io.Writer) *probeDeliveryAudit {
++	hash := func(iri vocab.IRI) string { sum := sha256.Sum256([]byte(iri)); return hex.EncodeToString(sum[:]) }
++	a := &probeDeliveryAudit{output: output}
++	if !vocab.IsNil(it) {
++		a.activityHash = hash(it.GetLink())
++		_ = vocab.OnActivity(it, func(act *vocab.Activity) error {
++			if !vocab.IsNil(act.Object) {
++				a.objectHash = hash(act.Object.GetLink())
++			}
++			return nil
++		})
++	}
++	return a
++}
++func startProbeDeliveryAudit(it vocab.Item) *probeDeliveryAudit {
++	if os.Getenv("KIMINO_DELIVERY_AUDIT") != "1" {
++		return nil
++	}
++	return newProbeDeliveryAudit(it, os.Stderr)
++}
++func (a *probeDeliveryAudit) finish() {
++	if a == nil {
++		return
++	}
++	record := struct {
++		ActivityHash  string `json:"activity_hash"`
++		ObjectHash    string `json:"object_hash"`
++		RemoteTargets int    `json:"remote_targets"`
++		LocalFailed   bool   `json:"local_failed"`
++		RemoteFailed  bool   `json:"remote_failed"`
++		Completed     bool   `json:"completed"`
++	}{a.activityHash, a.objectHash, a.remoteTargets, a.localFailed, a.remoteFailed, a.completed}
++	data, err := json.Marshal(record)
++	if err != nil {
++		return
++	}
++	probeDeliveryOutput.Lock()
++	defer probeDeliveryOutput.Unlock()
++	_, _ = a.output.Write(append(append([]byte("KIMINO_DELIVERY_AUDIT "), data...), '\n'))
++}
+--- /dev/null
++++ b/probe_delivery_audit_test.go
+@@ -0,0 +1,47 @@
++package processing
++
++import (
++	"bytes"
++	"encoding/json"
++	vocab "github.com/go-ap/activitypub"
++	"strings"
++	"testing"
++)
++
++func TestKiminoDeliveryAudit(t *testing.T) {
++	activity := &vocab.Activity{ID: "https://private.example/activity/1", Type: vocab.CreateType, Object: &vocab.Object{ID: "https://private.example/note/1", Type: vocab.NoteType, Content: vocab.DefaultNaturalLanguage("private draft must never be logged")}}
++	var output bytes.Buffer
++	audit := newProbeDeliveryAudit(activity, &output)
++	audit.remoteTargets = 0
++	audit.finish()
++	var value map[string]any
++	if err := json.Unmarshal(bytes.TrimPrefix(output.Bytes(), []byte("KIMINO_DELIVERY_AUDIT ")), &value); err != nil {
++		t.Fatal(err)
++	}
++	if value["completed"] != false {
++		t.Fatal("unfinished dispatch must not be successful")
++	}
++	if strings.Contains(output.String(), "private") || strings.Contains(output.String(), "https:") {
++		t.Fatal("audit leaked source information")
++	}
++	if len(value["activity_hash"].(string)) != 64 || len(value["object_hash"].(string)) != 64 {
++		t.Fatal("missing correlation hashes")
++	}
++	output.Reset()
++	audit.completed = true
++	audit.remoteTargets = 1
++	audit.remoteFailed = true
++	audit.finish()
++	if err := json.Unmarshal(bytes.TrimPrefix(output.Bytes(), []byte("KIMINO_DELIVERY_AUDIT ")), &value); err != nil {
++		t.Fatal(err)
++	}
++	if value["completed"] != true || value["remote_targets"] != float64(1) || value["remote_failed"] != true {
++		t.Fatal("terminal evidence lost")
++	}
++}
++func TestKiminoDeliveryAuditDisabled(t *testing.T) {
++	t.Setenv("KIMINO_DELIVERY_AUDIT", "")
++	if startProbeDeliveryAudit(&vocab.Activity{ID: "https://example.test/activity"}) != nil {
++		t.Fatal("audit must be opt in")
++	}
++}

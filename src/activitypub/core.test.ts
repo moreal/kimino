@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { evaluateActivities, ownReaction } from '../domain/evaluate';
 import type { NoteReaction } from '../domain/social';
 import { ActivityPubClient } from './client';
-import { GatewayProtocolError, GatewayRejected, toFailure } from '../application/gateway-errors';
+import {
+  GatewayProtocolError,
+  GatewayReadLimit,
+  GatewayRejected,
+  toFailure,
+} from '../application/gateway-errors';
 const alice = 'https://social.test/alice',
   bob = 'https://else.test/bob',
   id = 'https://social.test/notes/1';
@@ -306,9 +311,9 @@ describe('browser client', () => {
         () => undefined,
         (error: unknown) => error,
       );
-    // A read that would be truncated is a protocol failure, never an empty timeline.
-    expect(failure).toBeInstanceOf(GatewayProtocolError);
-    expect(toFailure(failure)).toMatchObject({ kind: 'protocol', reason: 'unexpected-response' });
+    // A client resource bound is distinct from malformed server data.
+    expect(failure).toBeInstanceOf(GatewayReadLimit);
+    expect(toFailure(failure)).toEqual({ kind: 'read-limit', reason: 'pages', limit: 100 });
     // The ceiling is a positive whole number of pages.
     for (const maxPages of [0, -1, 1.5])
       expect(() => new ActivityPubClient({ actorUrl: alice, maxPages })).toThrow(/page limit/i);

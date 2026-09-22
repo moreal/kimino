@@ -74,6 +74,8 @@ const domGlobals =
  * the only places that read it are the composition root and the adapters.
  */
 const clockGlobals = /\bDate\.now\s*\(|\bnew\s+Date\b/;
+/** Presentation may parse supplied dates, but must receive its current time explicitly. */
+const wallClockGlobals = /\bDate\s*\.\s*now\s*\(|\bnew\s+Date\s*(?:\(\s*\)|(?![\w\s(]))/;
 /** Storage in particular is never read from a view: it comes in through the ports. */
 const storageGlobals = /\b(?:localStorage|sessionStorage)\s*[.(]/;
 const bridge = (file: string) => file.startsWith(join('src', 'presentation', 'solid') + '/');
@@ -131,7 +133,10 @@ it('presentation stays free of adapters, DOM globals, and Solid outside presenta
       'app',
       'entry-client',
     ]);
-    if (!bridge(file)) expect(code, file).not.toMatch(domGlobals);
+    if (!bridge(file)) {
+      expect(code, file).not.toMatch(domGlobals);
+      expect(code, file).not.toMatch(wallClockGlobals);
+    }
     if (!file.startsWith(join('src', 'presentation', 'solid') + '/'))
       for (const dependency of imports(code))
         expect(/^(?:solid-js|@solidjs)(?:\/|$)/.test(dependency), `${file}: ${dependency}`).toBe(

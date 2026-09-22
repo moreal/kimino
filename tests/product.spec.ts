@@ -416,10 +416,8 @@ test.describe('content warnings, attachments and visibility', () => {
     await composer.getByLabel('새 글').click();
     await expect(composer.locator('.compose-options')).toBeVisible();
     // What the composer cannot do is said here, not implied by a missing button.
-    await expect(composer.locator('.compose-scope')).toHaveText(
-      '이미지 첨부는 아직 지원하지 않아요. 대체 텍스트도 여기서는 쓸 수 없어요.',
-    );
-    await expect(composer.locator('input[type="file"]')).toHaveCount(0);
+    await expect(composer.locator('.image-picker-help')).toContainText('ONI 이미지 게시 사용');
+    await expect(composer.locator('input[type="file"]')).toBeDisabled();
     await expect(composer.getByRole('radio', { name: '공개', exact: true })).toBeChecked();
     await expect(composer.locator('.visibility')).toContainText('누구나 볼 수 있어요');
     await composer.getByRole('radio', { name: '팔로워만' }).check();

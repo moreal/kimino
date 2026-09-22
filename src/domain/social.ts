@@ -1,3 +1,4 @@
+import type { ImageAttachment, ImageDraft } from './images';
 export type ASObject = Record<string, unknown>;
 export interface Actor {
   id: string;
@@ -8,6 +9,10 @@ export interface Actor {
   summary?: string;
   icon?: string;
   followers?: string;
+  following?: string;
+  proxyUrl?: string;
+  /** Explicit fixture capability; never inferred from a generic ONI connection. */
+  privateMedia?: boolean;
 }
 export type ReactionKind = 'like' | 'share';
 /**
@@ -28,6 +33,10 @@ export interface Attachment {
 }
 /** What a client writes; the gateway derives addressing and escaping from it. */
 export interface NoteDraft {
+  /** Selected local images; the application resolves them before a Note is sent. */
+  images?: readonly ImageDraft[];
+  /** Resolved Image objects for the outbox adapter. Never local data URLs. */
+  attachments?: readonly ImageAttachment[];
   content: string;
   /** Content warning shown before the body; servers keep it as `summary`. */
   summary?: string;

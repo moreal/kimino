@@ -1,0 +1,37 @@
+{
+  auto_https disable_redirects
+}
+https://alice.test:FOLLOW_PORT {
+  tls internal
+  header Access-Control-Expose-Headers "Location"
+  @publicRoot {
+    method GET
+    path /
+  }
+  @signatureRoot {
+    method GET
+    path /
+    header Authorization Signature*
+  }
+  request_header @publicRoot -Signature
+  request_header @publicRoot -Signature-Input
+  request_header @signatureRoot -Authorization
+  reverse_proxy alice:4000
+}
+https://bob.test:FOLLOW_PORT {
+  tls internal
+  header Access-Control-Expose-Headers "Location"
+  @publicRoot {
+    method GET
+    path /
+  }
+  @signatureRoot {
+    method GET
+    path /
+    header Authorization Signature*
+  }
+  request_header @publicRoot -Signature
+  request_header @publicRoot -Signature-Input
+  request_header @signatureRoot -Authorization
+  reverse_proxy bob:4000
+}

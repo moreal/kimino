@@ -1,7 +1,9 @@
+import { relationshipCopy } from '../presentation/copy-relationships';
 import { Show } from 'solid-js';
 import type { FeedState } from '../presentation/feed-view-model';
 import { actorLabelOf } from '../presentation/actor-name';
 import { copy } from '../presentation/copy';
+import { readingCopy } from '../presentation/copy-reading';
 import FailureAlert from './FailureAlert';
 import Icon from './Icons';
 
@@ -16,6 +18,8 @@ export default function PageHeader(props: {
   onDismissError: () => void;
   onQuery: (query: string) => void;
   onClearFilter: () => void;
+  onManageHidden: () => void;
+  onPeople: () => void;
   /** Opens the connected account's sheet (below the desktop width, where the column is hidden). */
   onAccount?: () => void;
   /** The heading, decided with the thread placement (the list name while a thread sits aside). */
@@ -38,6 +42,15 @@ export default function PageHeader(props: {
           </h1>
         </div>
         <div class="header-actions">
+          <button
+            type="button"
+            class="text-button people-open"
+            disabled={!props.state.actor || props.state.connecting}
+            onClick={props.onPeople}
+            aria-haspopup="dialog"
+          >
+            {relationshipCopy.open}
+          </button>
           <Show when={props.listVisible}>
             {/* The label wraps the icon (a tap on it opens the field); the clear control is a
                 sibling, so it is never a click on the label. */}
@@ -115,6 +128,19 @@ export default function PageHeader(props: {
           <button class="text-button demo-pill-action" onClick={props.onConnectAccount}>
             {copy.demoBannerAction}
             <Icon name="arrow-right" class="icon--sm" />
+          </button>
+        </div>
+      </Show>
+      <Show when={props.state.mutedAuthors.length}>
+        <div class="reading-filter">
+          <span>{readingCopy.hidden(props.state.mutedAuthors.length)}</span>
+          <button
+            type="button"
+            class="text-button"
+            aria-haspopup="dialog"
+            onClick={props.onManageHidden}
+          >
+            {readingCopy.manage(props.state.mutedAuthors.length)}
           </button>
         </div>
       </Show>

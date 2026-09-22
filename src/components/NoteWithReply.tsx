@@ -32,6 +32,7 @@ export default function NoteWithReply(props: {
     return {
       actor: state.actor?.id,
       parent,
+      parentHidden: !!note.inReplyTo && state.hiddenNoteIds.has(note.inReplyTo),
       parentGone: parentState(state.byId, note, state.gone) === 'gone',
       replies: state.replyCounts.get(note.id) ?? 0,
       draft,
@@ -40,7 +41,7 @@ export default function NoteWithReply(props: {
       revealed: state.revealed.has(note.id),
       pending: state.pending.get(note.id),
       feedback: state.actionError[note.id],
-      hasDraft: !replyOpen && draft.trim().length > 0,
+      hasDraft: !replyOpen && (draft.trim().length > 0 || !!state.draftImages[note.id]?.length),
       replyOpen,
       error: state.composeError?.key === note.id ? state.composeError : undefined,
       // Editing and confirming a deletion belong to the same copy of the card as the reply
@@ -85,6 +86,7 @@ export default function NoteWithReply(props: {
         }}
         parent={view().parent}
         parentGone={view().parentGone}
+        parentHidden={view().parentHidden}
         parentAdjacent={props.parentAdjacent}
         soloAuthor={props.state.soloAuthor}
         onReact={(note, kind) => void props.vm.react(note, kind)}
@@ -157,6 +159,17 @@ export default function NoteWithReply(props: {
             replyTo={props.note}
             self={props.state.actor}
             draft={view().draft}
+            options={props.state.composeOptions[props.note.id]}
+            onOptions={(value) => props.vm.setComposeOptions(props.note.id, value)}
+            disabled={props.state.publishing.has(props.note.id)}
+            images={props.state.draftImages[props.note.id]}
+            uploads={props.state.mediaUploads}
+            imageUploadEnabled={props.state.imageUploadEnabled}
+            privateImageUploadEnabled={props.state.privateImageUploadEnabled}
+            onAddImage={(image) => props.vm.addDraftImage(props.note.id, image)}
+            onRemoveImage={(id) => props.vm.removeDraftImage(props.note.id, id)}
+            onImageAlt={(id, alt) => props.vm.setImageAlt(props.note.id, id, alt)}
+            onResolveImage={(id) => props.vm.resolveImage(props.note.id, id)}
             onDraft={(value) => props.vm.setDraft(props.note.id, value)}
             error={view().error}
             onSubmit={props.vm.publish}

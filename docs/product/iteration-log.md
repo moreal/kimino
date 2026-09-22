@@ -1275,3 +1275,1162 @@ and writes; 11 real-ONI). Not done: `NOTE_LIMITS` reaches the composer through
 a presentation re-export of a domain constant, which is allowed by the boundary
 test but is a seam worth a look; the follow timeline remains the gap behind
 every primary-use "no".
+
+### Round 19 — preview before credentials, writing position before the footer
+
+2026-09-22. A fresh independent surrogate reviewed desktop (1440×900) and phone
+(390×844) screenshots and used preview, saved posts, conversations and reply
+drafts without reading earlier verdicts. This is simulated feedback, not user
+research. Verdict: **no migration from Mastodon**, because the existing account
+and network cannot be brought here; **would trial a compatible C2S account as a
+quiet secondary reader**. The quiet palette and reading width worked. Ranked
+frictions: the phone reply's submit/cancel fell below the bottom navigation;
+the landing asked for a localhost Actor URL and exposed sessionStorage jargon;
+the desktop's wide right rail repeated a reply already in the feed. Search was
+interrupted during this review and was not reported as a product defect.
+Screenshots: `/tmp/kimino-review19/{landing-mobile,feed-desktop,reply-draft-mobile}.png`.
+
+Implemented the first two bounded fixes. The preview now precedes credentials,
+with explicit example/read-only wording and a divider separating C2S connection.
+An account URL example replaces localhost; local setup remains in developer
+help. The retention checkbox uses plain language while its selected-state helper
+still states the exact token storage behavior. Preview storage details remain
+available in a disclosure. Existing colors, typography and styling system stay
+consistent rather than adding a second visual system.
+
+The reply failure was measurable: at 390×844 the submit button ended at y=837
+behind navigation starting at y=787; at 390×300 the focused textarea began at
+y=-56.5 after the footer scroll. The form now scrolls as a whole when it fits,
+with bottom navigation clearance, then keeps its textarea visible when it does
+not fit. Detached forms cannot scroll a later screen. Three browser regressions
+failed on the original behavior and passed after the changes (including draft
+preservation on cancel/reopen). A short viewport is a proxy for limited vertical
+space; this does not claim a physical-device virtual-keyboard test.
+
+The independent architecture audit reproduced an owed read leaking across a
+direct reconnect and a disconnected reaction withdrawal throwing a raw
+TypeError. Queue reset now clears the previous session's owed read; withdrawal
+uses typed connection failures. Both have regression tests. Presentation time
+helpers now require the injected/shared clock, including the account tooltip;
+the architecture guard permits date parsing but rejects implicit wall-clock
+reads outside the Solid bridge. NOTE_LIMITS remains a single inward dependency,
+not duplicated merely to avoid its presentation export.
+
+Deliberately deferred: shrinking the right rail also shrinks the active thread
+and its action rows, so a static width reduction needs a separate comparison;
+no unrelated layout overhaul or animation was introduced. Follow/network
+compatibility, media authoring and the outbox page ceiling remain separate
+product requirements. No reviewer was asked to change their verdict.
+
+Independent code review found no P1/P2 defects. It identified that the new UI
+regressions must be included by the documented `test:e2e:ui` command; integration
+will put them alongside the existing UI cases. Final verification and fresh
+post-change surrogate verdict follow in Round 20.
+
+### Round 20 — a fresh verdict, then keep the draft visible after a resize
+
+A second fresh surrogate, again without the earlier verdicts, used landing,
+preview, search, saved posts, conversations, reply, cancel and reopen at
+1440×900 and 390×844. Verdict: **no Mastodon migration** (existing-account
+compatibility and image authoring remain blockers); **yes for a compatible C2S
+account as a text-focused secondary client**. They found the reading surface
+calm and readable and the audience/local-saving scopes clear. This remains
+simulated feedback, not actual user research. The surrogate used demo data;
+real connection and writes are covered separately by the ONI suite.
+
+Measured confirmation: phone submit bottom 736px, navigation top 787px; a reply
+opened at 390×300 keeps the textarea at y129–217. Cancel and reopen preserve the
+exact draft, draft badge and notice. The first un-settled screenshot preceded
+the mount layout frame; the settled measurements and screenshots are the review
+evidence, not that transient frame.
+
+One new bounded issue: resizing an already focused reply from 390×844 to
+390×300 left its input at y379–467. Added a regression that failed with visibility
+ratio zero, then kept the current focused composer control visible on window
+resize. The handler coalesces frames, checks that the target is still focused
+and connected, and removes its listener/pending frame on disposal. Unfocused
+composers cannot move the reader. Independent code re-review found no P1/P2
+lifecycle or focus defects. The same surrogate verified the fix: after resize
+input y144–232, navigation y243; cancel/reopen input y129–217 and exact draft
+preserved. Their migration verdict did not change and was not challenged.
+
+Also separated the connection field's accessible name from its help description
+so a screen reader need not repeat the compatibility text. The four new browser
+regressions now live in `tests/ui.spec.ts`, covered by the documented isolated
+UI command. Sacho fragments and generated `CHANGES.md` are updated.
+
+Screenshots: `/tmp/kimino-review20/{landing-mobile,landing-desktop,preview-desktop,reopened-mobile,fixed-shrink,fixed-shrink-reopen}.png`.
+Visual review scope: typography, surfaces and existing icons in those screens;
+no new motion, no physical-device keyboard or assistive-technology session.
+Window resize coverage does **not** prove mobile `visualViewport` keyboard
+behavior. Follow/network compatibility and media creation remain product
+requirements; more decorative polishing will not remove them.
+
+Final code verification: `npm run check` passed (393 unit tests, strict types,
+format, production build and Sacho consistency). The full browser rerun after
+the last source change passed: **154 Playwright tests**, including **11 real
+ONI tests**. `git diff --check` also passed. The local fixture was started
+without resetting its data; smoke checked its readable page count before the
+real-server suite.
+
+### Round 21 — control unwanted authors, not just include favourite ones
+
+2026-09-22 continuation. The previous goal turn made verified progress, but did
+not complete the broader product objective. A new independent surrogate who
+values control over an overwhelming feed used phone and desktop screenshots,
+search, saving, author sheets and conversations. Verdict: **no Mastodon account
+migration; only a trial as a secondary C2S reader**. Highest bounded blocker was
+missing negative reading controls: an author could be included exclusively but
+not hidden. They explicitly asked for reversible local author hiding, with a
+discoverable management list, without calling it server blocking. Thread hiding
+and account/media capabilities remained distinct needs. The author-name buttons
+were also only 18.5–24.2px wide despite 44px height. This is agent simulation,
+not human research. Evidence: `/tmp/kimino-review21/`.
+
+Implemented author hiding across loaded timeline, received replies, search,
+saved cards, parent previews, conversations and the reply peek. The account's
+own author cannot be hidden. Saved IDs and unsent drafts stay intact. Unknown
+unloaded saved links stay accessible because this client does not know their
+author; the manager explains that exception. Known hidden parent notes get an
+explicit hidden-parent cue, never a misleading deleted/unloaded statement or an
+external link around the filter. Author hiding closes affected editing context
+and refuses stale hidden-note reply/thread navigation.
+
+Architecture: domain evaluation and the HTTP adapter are unchanged. Pure
+`presentation/reading-controls.ts` owns filtering; the view model owns commands,
+notices and the preference port. Browser serialization stores author IRIs only
+under account-specific keys, wired at bootstrap. Preferences are loaded before
+the first actor snapshot is emitted to avoid briefly exposing hidden cards.
+Storage refusal applies changes only in memory and says so. Preview never stores
+hidden authors and resets them on exit/reload. UI receives projected state and
+commands; Korean copy lives in `copy-reading.ts`.
+
+The author sheet offers the action; a persistent header count opens the native
+modal manager. Each row restores an author. Native modal containment makes the
+background application inert, and closing returns focus to its opener or the
+heading when the opener disappeared. Short author names now get a 44px-wide
+phone target. Added `tests/reading-controls.spec.ts` to the documented isolated
+UI command so these tests are not accidentally omitted.
+
+### Round 22 — explain absence and preserve the control being used
+
+A fresh surrogate independently repeated save → hide → saved/replies and
+restore at 390×844 and 1440×900. They found hiding and restoring understandable,
+the local scope honest, and the mobile sheet layouts usable. Verdict remained
+**no Mastodon migration; worth trialling as a reading-focused C2S companion**.
+They did not verify real writes and did not claim to. Two actionable findings:
+the generic empty copy implied no saved posts/replies existed, and the scope
+text did not name all the affected screens. Both were implemented, not merely
+recorded. A pure counterfactual checks whether this exact list/search would have
+matching non-deleted notes without hiding, so unrelated hidden authors cannot
+be blamed for a genuine empty search. It then explains hiding and offers
+'숨김 설정 확인'. Scope names all five surfaces and preserved links/drafts.
+
+Independent code review found a P2: recreating ActorProfile objects on each
+session update replaced the management rows and lost keyboard focus. A delayed
+refresh test reproduced it. Solid 2's ID-keyed `For` with accessor children now
+keeps the focused restore button when that refresh lands. Scoped code re-review
+found no remaining P1/P2 findings. The user surrogate also rechecked both empty
+states and scope copy, restored sol, and confirmed its saved state returned.
+Their migration verdict remained unchanged. Screenshots:
+`/tmp/kimino-review22/fixed-{author,saved,replies,restored}.png`.
+
+Five browser regressions cover hiding/restoring, saved-link preservation,
+account reconnect vs preview reset, hidden-parent conversation cues, short-name
+touch targets and delayed-refresh focus (the first flow groups related reading
+surface assertions). `npm run check` passed: 404 unit tests, strict types,
+format, production build and Sacho consistency. Final whole-browser run passed **159 tests**, including **11 real ONI
+tests**. `git diff --check` passed.
+
+Parallel capability evidence changed the next action: the pinned ONI really
+stores `Create/Image` media; a subsequent Note attachment retains its URL and
+alt text. Four deliberately tiny local probe records were created, with no
+remote recipients, credentials or bodies logged. Private binary reads enforce
+authentication. A single embedded attachment lacks a discoverable URL, so it
+cannot simply be treated as an interoperable one-request upload. Also, ONI has
+inbox Follow auto-Accept handling; the prior single-actor loopback failure does
+not prove lack of Follow support. Pinned sources, probes and limits are in
+`c2s-capability-evidence.md`. Image authoring and a reachable two-actor Follow
+fixture are still unfinished product work, not claimed as shipped. The broader
+goal remains active.
+
+### Round 23 — image authoring, then a mobile accessibility correction
+
+A fresh photography/accessibility surrogate reviewed desktop and 390×844 mobile
+flows. This is simulated feedback, not human research. Verdict: **no Mastodon
+migration; willing to try public photos with a compatible C2S account**. Existing
+Mastodon account compatibility and private-photo use remain blockers. The
+surrogate did not publish real posts; automated live ONI tests cover that path.
+
+Implemented explicit, default-off ONI image posting for public/unlisted new
+posts and replies: four local PNG/JPEG/WebP previews, alternative text, removal,
+and memory-only drafts. The UI explains that uploaded Images exist independently
+of a Note and can remain public after its failure/cancellation. Application
+receipt state distinguishes confirmed, unresolved and uncertain uploads; explicit
+Note retry reuses confirmed uploads, recovery only reads, and ambiguous outcomes
+never silently repeat. Tokens, recipients and remote-image loading retain their
+existing boundaries. Domain validation/evaluation stay pure, application owns
+write sequencing, the adapter owns the ONI convention, and presentation owns
+draft state and Korean copy. Architecture tests enforce inward dependencies.
+
+Independent code review found two material lifetime bugs: navigating away during
+upload could permit duplicate submission, and deleting a parent could retain
+its image draft. VM-level pending state and centralized draft disposal fix both.
+A scoped re-review found no remaining material concerns. Additional tests caught
+ONI omitting content on photo-only Notes and Solid 2 rejecting reactive cleanup
+writes when leaving during FileReader work. Both were reproduced and fixed. The whole-suite warning assertion also caught
+an imperative signal read in the picker cancellation effect; explicit untracked
+snapshots removed the Solid diagnostic, and scoped review confirmed the change.
+
+The user surrogate found image settings hard to discover and mobile alternative
+text too far below the editing position. Renamed the disclosure to ‘이미지 게시
+설정’ and focused/scrolled the first new alt field after selection, without
+stealing focus if the user already moved. Scoped mobile re-review confirmed the
+field at y710–776 above the bottom navigation, Korean alt entry, cancel/reopen
+preservation and removal back to 0/4. Their migration verdict remained **no**.
+Screenshots: `/tmp/kimino-review23/{mobile-photo,desktop-photo,fixed-mobile}.png`.
+
+Final verification: the complete check passed with 461 unit tests, strict
+types, production build and Sacho. The first full browser run passed 164/166; the two failures were the Solid
+diagnostic and a checkbox locator that became ambiguous after adding the upload
+option. Both fixes passed targeted regression and the final full rerun passed
+**166/166**, including **12 live ONI tests**. No product source changed after
+these checks. Private media, Follow/Accept/delivery and existing account
+compatibility remain distinct unfinished requirements; cosmetic approval does
+not close the active product goal.
+
+### Round 24 — subscriptions are the next product requirement
+
+A fresh simulated Korean small-community reader independently drove preview at
+1440×900 and 390×844, inspected screenshots, and closed both browsers. No real
+account connection or writes were performed, and the reviewer did not read the
+previous verdicts first. Verdict remains **no Mastodon migration**. Reading,
+received replies, parent/thread navigation and clearly local author filtering
+worked; mobile author and navigation controls fit. The two material blockers
+were existing account compatibility and inability to discover/subscribe to
+future posts. Searching an actor handle only searched loaded text; the author
+sheet offered filtering, external profile and hiding, not subscription.
+
+The reviewer requested contextual follow plus a separate address entry/people
+manager, visible identity before submission, explicit sent/pending/accepted
+states, preserved targets on failure, no blind retry after unknown outcomes,
+recoverable pending/following lists and clear limits on receiving historical
+posts. These requirements are recorded in `follow-design.md`. Independent
+architecture review added separate request/membership evidence after reconnect,
+a non-dereferencing IRI collection reader and independent reconciliation ordering.
+
+Screenshots: `/tmp/kimino-review24/desktop-author.png`, `desktop-search.png`,
+`mobile-author-feed.png`, `mobile-replies.png`, `mobile-conversation.png`.
+This is simulated feedback, not real user research. No UI feature is claimed
+shipped from the design alone.
+
+The separate two-actor ONI investigation now has loopback-only ingress, internal
+actor networking and a container-scoped CA. The initial TLS delivery failure is
+diagnosed; later DNS and authenticated/public actor reads work from inside the
+actor network. Follow acceptance/delivery is still unresolved and source-level
+key-fetch diagnosis is continuing. See `follow-capability-plan.md` for exact
+state and safe resume commands; do not resend an ambiguous Follow automatically.
+
+A bounded prerequisite is implemented in `activitypub/membership-reader.ts`:
+read only collection pages, retain remote member IRIs without profile fetches,
+validate origin/identity/partOf, require complete bounded traversal, reject
+inconsistent totals and propagate read failures. Independent review reproduced
+a false-absence bug when root `next` skipped `first`; four regressions failed
+before the fix. Strict root navigation now rejects ambiguity. All 33 reader
+cases and eight architecture checks pass; scoped re-review has no remaining
+material issues. This helper is not yet wired to product UI and does not make
+Follow a shipped feature.
+
+Final application check for this prerequisite passes: 494 unit tests, strict
+types, formatting, production build and Sacho. Last full browser evidence remains
+round 23’s166 tests; no browser rerun was needed for an unintegrated helper.
+`git diff --check` passes. The live server correction experiment continues in
+separate temporary infrastructure and is not a product compatibility claim.
+
+Further server evidence: an owned-root-only correction and exact public-root GET
+signature-header handling allow a matching Accept to reach Alice without the
+previous cold-start request explosion. Bearer and all inbox POST validation remain
+intact. A separate source filter incorrectly excludes actors from graph response
+items; a narrowly scoped experimental correction is building. Note delivery and
+Undo remain unverified. These are explicitly temporary server diagnostics, not
+stock ONI compatibility and not a browser-side federation workaround.
+
+### Round 25 — C2S Follow, received posts and exact withdrawal
+
+The user explicitly prioritized Follow and post reception while keeping the C2S
+boundary. Implemented a pure relationship evaluator, a complete graph/activity
+HTTP gateway, a framework-independent relationship controller and presentation
+projection. UI entry points are people management and a loaded author's profile.
+Requests, accepted membership, rejected requests, confirmed-but-unread writes and
+unknown outcomes remain distinct. Reads do not silently turn truncation into an
+empty graph. Accepted writes survive hydration failures; unknown POSTs are never
+automatically repeated. Withdrawal uses the exact persisted own Follow in Undo.
+No Mastodon REST or browser S2S inbox POST was introduced.
+
+The first independent simulated-user review exercised mocked desktop/mobile
+Follow → pending → accepted → received Note → Undo. It found ambiguous address
+checking and two separate refresh/navigation steps. Renamed the address action
+‘입력 주소 보기’, explicitly explained syntax-only checking, added contextual
+author guidance and a ‘타임라인에서 새 글 확인’ action. ActorSheet became a native
+modal with keyboard containment and return focus. Scoped independent re-review
+at 1440×900 and 390×844 confirmed these fixes, preserved input, one Follow/Undo
+per flow, no remote profile fetch and no page errors. Screenshots were opened
+and inspected in `/tmp/kimino-review25b`; the actor screenshots capture a transient
+status load, while settled text and keyboard checks include withdrawal.
+
+Candid verdict: **would trial a compatible C2S account; would not yet migrate a
+whole existing Mastodon community**. Remaining blockers are first-person discovery
+from an empty timeline and server-level moderation/relationship portability.
+These are functional requirements, not spacing or copy defects. This feedback is
+simulated, not real user research, and its server responses were mocked.
+
+Separate real evidence: a two-actor corrected ONI environment completed Follow,
+a matching Accept, both graph memberships, a production-shaped Note in Alice's
+inbox, exact Undo and both graph removals. A later Note remained absent during a
+bounded full-read window; this does not prove permanent cessation. The browser
+then independently completed Follow → Bob UI publication → Alice timeline
+reception → Undo. The repository OAuth helper was corrected after source review
+and the live browser test rerun passed (1/1, 4.1 seconds). Bearers remain only in
+memory; traces/screenshots/video are disabled for that test and token entry avoids
+secret-bearing timeout action logs.
+
+These results require explicit experimental server corrections: owned-origin
+locality, actor graph filtering, local followers expansion, authenticated cached
+Follow Undo with replay protection, and canonical HTTPS received-in identity
+behind TLS termination. A narrowly scoped exact-public-root GET key-bootstrap
+workaround is also required. No inbox POST authentication is stripped. Stock ONI
+and general server/account interoperability are **not** established. Source
+patches and provenance are in `dev/oni-follow/`; full diagnostic history is in
+`follow-capability-plan.md`.
+
+Independent code review found and fixed old rejected-request interference,
+collection first-page traversal, same-origin actor identity swaps, contradictory
+embedded relationship evidence, malformed partOf aliases and ActorSheet modality.
+Scoped re-reviews found no remaining material issue in those fixes. Reproducible
+fixture packaging and broad final verification are in progress; results below
+will supersede previous-round counts.
+
+Final verification: `npm run check` passed **584 unit tests**, formatting, strict
+types, production build and Sacho. The complete browser suite with the maintained
+Follow fixture explicitly enabled passed **172/172**, including the existing
+12 real stock-ONI tests and the new two-actor Follow/reception/Undo test. Earlier
+runs exposed one obsolete no-Follow assertion and a300ms image-read test race;
+the former now checks preview cannot submit Follow, and the latter uses an
+explicit release after navigation (5/5 repeated regressions passed). No product
+source changed for either correction. Final architecture review reports no
+P1/P2 findings. The unused temporary18447 environment was stopped with data
+preserved; the reproducible18448 fixture remains available.
+
+Packaging review also caught a missing integrity check for the local processing
+module replacement. Exact original-plus-replacement go.mod verification now runs
+before compilation and after server tests, with ambient Go overrides disabled.
+Seven offline guards and actual prepared-source tamper checks pass; independent
+scoped re-review cleared the finding. Bundle checksums and final diff whitespace
+checks pass. Round25 is complete; broader portability/discovery/moderation remain
+separate requirements, not implied by the experimental C2S success.
+
+### Round26 — from a familiar handle to the first Follow
+
+A fresh independent simulated Korean reading-group organizer inspected mocked
+1440×900/390×844 flows and screenshots. Verdict: **not yet migrating**. Two
+material blockers were technical Actor-URL entry from an empty account and an
+undifferentiated list of eight accepted/pending people. The second remains a
+separate next iteration; this round implements handle discovery and empty-feed
+entry rather than claiming copy changes solve either requirement.
+
+People management now explicitly looks up `@name@server` using a dedicated
+credential-free WebFinger adapter. It shows the handle and server-provided actor
+address before a separate C2S Follow. Typing makes no network request. Editing
+clears the candidate; unknown/unreachable/malformed lookup preserves input and
+manual actor-URL entry. Returned addresses are not represented as verified
+personal identity. Empty real timelines offer a visible people-finding action.
+
+Clean architecture: pure handle/JRD interpretation, an application discovery
+port and generation/cancellation controller, a separate HTTP adapter injected
+through bootstrap, and Korean presentation copy. The adapter rejects redirects,
+omits credentials/referrer, bounds streamed JSON to256KiB and times out body
+consumption. No profile/image GET, Mastodon REST or proxy was added. Subject
+binding is strict; hosted redirects/canonicalized subjects may need manual entry.
+
+Core independent source review reported no P1/P2 finding. Integration testing
+caught a new early reset notification before hidden-author preferences loaded;
+the reset now occurs after those account preferences are installed, and the
+existing privacy regression passes. Two new browser flows assert explicit
+lookup, no token/cookie/referrer, separate Follow, input invalidation and manual
+fallback. Additional selector coverage keeps first-follow guidance out of search,
+saved/reply lists, preview, disconnected states and author-hidden feeds.
+
+Scoped simulated-user re-review confirmed the first-person path on desktop and
+mobile, with exactly one mock Follow per flow and no lookup while typing.
+Candidate invalidation and failure fallback worked. Verdict remains **not yet**
+due to existing Mastodon-account compatibility and multi-person management.
+Screenshots were opened and inspected in `/tmp/kimino-review26`, including
+`mobile-lookup.png`, `mobile-lookup-failure.png`, `mobile-manual-fallback.png` and
+`desktop-empty.png`. This is simulated feedback and mocked browser traffic.
+
+Separate read-only external evidence: the official documentation's public
+WebFinger example returned200, CORS*, matching subject and one ActivityPub self
+link without credentials. No actual Follow was sent to that account. The local
+ONI nondefault-port acct lookup returns400 due to its colon-splitting parser; no
+server changes were made for discovery. Live Follow/reception coverage continues
+through exact actor URLs in the maintained fixture.
+
+Final verification: `npm run check` passes **636 unit tests**, formatting,
+strict types, production build and Sacho. The full browser suite with maintained
+Follow fixture enabled passes **174/174**, including12 stock-ONI tests and the
+actual two-actor Follow/reception/Undo test. The initial format gate identified
+one test-file formatting issue, corrected without a behavior change. Final UI/VM
+source review reports no actionable P1/P2 finding. `git diff --check` passes.
+Round26 is complete; the ranked multi-person list issue remains next.
+
+### Round27 — managing a small group's relationships
+
+Previous turn made verified progress: explicit handle lookup,636unit and174
+browser checks. Current PeopleDialog and relationship projection were re-read.
+User26's concrete eight-person list finding drives this round: accepted/pending
+people lacked counts/search and close/refresh scrolled offscreen.
+
+Implemented separate find/manage views, globally counted status filters and
+local name/handle/address search using a pure presentation projection. Pending,
+confirmed and uncertain operations go to attention even when older membership
+says following. No remote profile fetch or guessed display name is added; absent
+profiles show their exact address once. Stable target keys preserve row identity.
+Close/view controls and refresh surround an independently scrolling body. Input
+and candidates remain available in finding; existing requests use the same
+application safeguards. All text uses existing Korean presentation copy/tokens.
+
+Five projection regressions plus existing relationship/architecture checks pass.
+Initial browser verification caught Solid2 untracked effect reads and boolean
+ARIA attribute types; explicit snapshot reads and string ARIA states fixed them.
+Independent scoped source review has no P1/P2 finding. Browser and fresh simulated
+user verification are in progress; final results will be appended.
+
+Fresh simulated user27 independently drove desktop/mobile 3accepted/5pending,
+local filtering/search/reset, find/manual candidate and separate Follow, long
+scroll refresh, keyboard and Escape return. All browser contexts closed. Verdict:
+**eight-person management is usable; not migrating primarily because existing
+Mastodon account login is unsupported**. Unknown profiles still require matching
+raw addresses; public identity enrichment is separate capability, not permission
+to guess names or fetch remote profiles automatically. Reviewer also measured a
+24px refresh button and tightly adjacent mobile filters. Those concrete tap-target
+and spacing issues are being corrected. Screenshots were actually inspected in
+`/tmp/kimino-review27`; only mocked requests were used, not live delivery research.
+
+The initial full browser suite passed175/175 before the touch refinements.
+A new geometry assertion then reproduced the refresh button's24px height (RED)
+and passed after the44px minimum (GREEN). View controls now have padding/gaps;
+mobile state filters use a two-column grid with separated counts. The manage
+intro is shorter and the existing timeline action moved to the fixed footer,
+freeing list space. Eight relationship browser tests pass again. Scoped visual
+re-review and final post-refinement checks are in progress.
+
+Scoped visual re-review confirmed44px controls,8px gaps, stable footer and no
+overflow. It correctly found that the intended grid rule had not landed: mobile
+was3+1. The coordinator applied the missing rule, added a coordinate regression
+for two aligned mobile columns, and reran the mock harness. Final screenshots
+`mobile-final-list.png` and `desktop-final-list.png` were rendered; the mobile
+image was opened and verified. This last grid confirmation is coordinator
+evidence, not a claim that the simulated reviewer saw a later build.
+
+Remaining product limitation identified by user27: people without received posts
+have no loaded profile name, so operators must compare exact actor addresses.
+A future explicit public-profile read may help, but needs a separate bounded
+transport/use-case design; never auto-fetch profiles or attach C2S credentials.
+Account compatibility remains intentionally constrained to C2S.
+
+Final round27 verification: fullbrowser **175/175** passes after the finalgrid
+andtouch changes; full`npm run check` passes **641unit**, formatting,types,build
+andSacho. The600pxfilter breakpoint was then registered in the central named
+token table to satisfy the design-system gate; this changed no tested CSS or UI
+behavior. Finaldiff whitespacecheck passes. No commits or publication.
+
+Follow-up source investigation found a separate correctness issue in timeline
+diagnostics: Follow/Accept/Reject are counted as ignored by the note evaluator,
+but copy calls them globally unsupported; valid Undo(Follow) may be classified
+as a rejected reaction withdrawal. This did not block the reviewed manager flow
+but should be corrected next, before new profile features. Keep unknown activity
+counts and forged-reaction rejection tests; do not subtract graph snapshots from
+timeline diagnostics. Source references: domain/evaluate.ts around147/267 and
+presentation/copy.ts around418/447. Investigation was read-only this round.
+
+### Round28 — truthful timeline diagnostics for relationships
+
+Previous turn made verified progress: people-management hierarchy,641unit and175
+browser checks. Current evaluator and diagnostic copy were inspected before this
+bounded fix. Follow/Accept/Reject were not rendered as notes, but that count was
+called product-wide unsupported; Undo(Follow) entered reaction withdrawal logic.
+
+Presentation now names unrendered timeline activity without implying missing
+product support. It explains that relationship activities or unhandled timeline
+types may be included. Rejected-shape/ownership evidence is described separately
+without claiming every case was a mismatching author. Four copy regressions
+failed before the change; new wording passes. Domain withdrawal correction and
+independent review are in progress. No graph-snapshot subtraction, network change
+or new user-facing capability is part of this fix.
+
+Domain implementation adds conservative relationship Undo recognition using raw
+original evidence before timeline deduplication. Valid embedded originals or
+loaded IRI references affect diagnostics only; ID/type/actor/target conflicts
+cannot fall through to Like/Announce removal. Seventeen new domain regressions
+and existing protections pass; bare unknown Undo references remain rejected and
+Delete(Follow) behavior is unchanged. Independent scoped review found no P1/P2.
+
+Fresh simulated user28 checked desktop/mobile eight Follow records plus a normal
+Note, then valid Undo(Follow), then separate malformed/forged Notes. Counts and
+people-management states agreed; valid withdrawal had no exclusion warning, and
+invalid Note evidence remained a separate diagnostic. Screenshots were opened
+and inspected in `/tmp/kimino-review28`, including mobile Undo and invalid detail.
+Verdict: **would trial a secondary C2S reader, primary migration undecided**.
+Actual account/server compatibility and private-media needs are the remaining
+requirements; a small mocked timeline cannot establish long-term adoption. No
+further copy polishing was requested; a wrapped footer line is optional P3.
+
+Fullcodecheck passed658unit,format/types/build/Sacho. Four focused browser cases
+passed; final complete browser suite is running. An optional user question asks
+for a real C2S server kind/public address to prioritize compatibility checks, with
+no request for credentials. It does not block local improvement.
+
+Follow-up read-only source audit identified a separate diagnostic gap for the
+supported ONI Create/Image upload convention: every Create currently enters
+`toNote`, so a standalone Image counts as rejected. Existing image evaluator
+coverage only checks Notes with attachments. Next bounded correction should
+recognize valid own Create/Image as unrendered without rendering/fetching it,
+with strict actor/self/object/activity identity and supported raster-type checks.
+Malformed/forged Note protections must remain. This was source evidence only;
+no image-classification implementation or new compatibility claim in round28.
+
+Final round28 verification: **658 unit tests** and formatting/types/production
+build/Sacho pass. The complete browser suite, with the maintained two-actor
+fixture enabled, passes **175/175**. Its first run had174 passes and one old
+wording assertion; the corrected assertion passed alone and the full rerun then
+passed. `git diff --check` passes. No source behavior changed after verification.
+Relationship diagnostics are complete for this round; the separate Create/Image
+classification gap remains the next bounded task.
+
+### Round29 — own image-upload activity diagnostics
+
+Previous round made verified progress with relationship diagnostics,658unit and
+175browser checks. The current ONI adapter/evaluator and tests were re-read.
+A credentialed read of existing local fixture metadata (no new POST) confirmed
+an Image Create with own-origin activity/object IDs, matching actor/attributedTo,
+image/png media type and no URL/content. Only booleans/type metadata were logged;
+no tokens, object bodies, names or image bytes were output.
+
+The pure evaluator now recognizes structurally valid own raster Image Creates as
+unrendered, not rejected Notes. Self/actor/attributedTo, explicit safe own-origin
+IDs, unambiguous types and PNG/JPEG/WebP are required. No new image card, network
+fetch or automatic display is introduced. Attached Notes retain existing handling;
+foreign Image Creates remain outside this scoped recognition. New negative tests
+preserve malformed/forged Note and mixed-type protections.
+
+Mock upload fixtures now retain the Image Create in the outbox, matching the real
+server, so browser coverage can detect the previous false warning. A real ONI
+image test now compares rejected counts before/after upload of all three raster
+formats. Domain RED→GREEN and150narrowchecks pass. Source review and browser
+verification are in progress.
+
+Fresh simulated photo-sharing user29 exercised image selection, alt text,
+publishing, one visible Note, diagnostic details and explicit loading at1440×900
+and390×844. Valid uploads had no rejection warning; malformed-author Notes still
+had a separate exclusion message. No image request occurred before explicit load,
+and alt text survived. Screenshots were opened and inspected under
+`/tmp/kimino-review29`. All mock browsers closed; an existing Vite listener was
+left untouched. Verdict: **would use a public-photo ONI secondary client, not
+fully migrate**. Existing Mastodon account compatibility and follower-only photo
+publishing remain functional limits; visual polishing is not their solution.
+
+Related test hygiene was tightened: main real-C2S tests now disable failure
+traces/screenshots/video, and token entry uses an editable check plus DOM input
+event rather than secret-bearing locator.fill metadata. This matches the separate
+Follow suite's protections. Independent scoped review found no privacy/correctness
+issue. Source classification review likewise found no P1/P2. Fullcodecheck passes
+674unit,format/types/build/Sacho; complete browser suite is running.
+
+Final round29 verification: `npm run check` passes **674 unit tests**, format,
+types, production build and Sacho. The complete browser suite with both local
+fixtures enabled passes **176/176**, including the real PNG/JPEG/WebP diagnostic
+regression and real Follow/reception/Undo. Final whitespace check passes. No
+product behavior changed after these checks. Public/unlisted own-upload scope
+remains explicit; no private-media or general-server compatibility claim added.
+
+## Round30 — recipient media evidence and recoverable image loading
+
+The isolated 18449 fixture established a confirmed Alice→Bob Follow and five
+synthetic Creates with no write retries. Direct/follower objects reached Alice's
+inbox. Owner-only protection did not translate to follower binary access: the
+existing proxy returned follower404 and AS JSON rather than PNG. Restricted
+owner reads used public cache headers; a warmed direct-recipient metadata proxy
+response was readable anonymously. This is a metadata/description disclosure,
+not evidence of restricted PNG bytes leaking. See [evidence](private-media-evidence.md).
+No client proxy integration, private scope or server authorization patch was added.
+
+Reader UI now explains failed explicit image loads, retains alt text, offers
+manual retry and hide, and ignores stale image callbacks. Independent review
+identified keyboard focus loss from swapping buttons; a stable button and focus
+assertions address it. No automatic media requests/retries or cross-origin bearer
+use were introduced. Fresh simulated user review and final validation pending.
+
+Fresh simulated user30 visually inspected desktop/mobile failure and loaded
+screenshots. Keyboard Enter/Space preserved focus; alt text remained visible,
+mobile retry was 44px high, and there was no overflow. Requests were 0 before
+consent, 1 after failure, 2 after explicit retry and still 2 after hide, with no
+authorization/referrer headers. No P1/P2 UI blocker; scoped independent source
+re-review also cleared the focus correction. Verdict: recovery is usable, but
+**would not migrate an existing Mastodon account yet** because account/network
+compatibility and restricted-media delivery remain separate requirements. This
+is simulated feedback, not real user research. Reviewer browser is closed and
+the existing Vite listener was left untouched.
+
+Code verification passes 674 unit tests, formatting, types, production build
+and Sacho after synchronizing the new change fragment. Complete 177-test browser
+verification is running; do not treat its count as a passed result yet.
+
+Final browser run did not pass: **167 passed, 4 failed, 1 interrupted, 5 not
+run**. The coordinator stopped repeated identical main8443 connection failures;
+new image recovery and corrected18448 Follow/reception/Undo passed. Failing
+cases showed a connection format error before any test-specific write, rather
+than merely slow sharing. A bounded read-only audit is checking whether the
+grown preserved collection exceeds the existing complete-read limit. Do not
+report177/177 or reset the fixture to hide the issue. No active suite remains.
+
+Read-only diagnosis confirmed the exact boundary: main outbox declares1982
+activities;100pages already contain1982distinct activities, but advertise next.
+Page101 is empty and terminal. All104HTTPreads (actor1,inbox2,outbox101) returned
+200. The client default maxPages100 refuses before requesting that terminal page,
+so the connection is classified as unexpected response. This is not proof of
+malformed server data or more than2000activities. No data reset, writes, limit
+increase or silent truncation was used. Next iteration must address bounded
+large-history semantics and durable test isolation; a larger arbitrary ceiling
+would only postpone the fixture-growth failure.
+
+## Round31 — explicit continuation for large histories
+
+The previous round produced real evidence: main8443 reaches its100page budget
+while a valid empty terminalpage101 remains. Implemented bounded user-controlled
+continuation without skipping next links, restarting previous pages, publishing
+a partial initial timeline or changing the hard object/depth bounds. Application
+owns one current read/gate; per-read abort is separate from session/POST abort.
+Connect, refresh and full fallback after confirmed writes share this mechanism.
+Cancel keeps the previous timeline/draft; confirmed writes are never retried.
+Relationship reads still require complete evidence within their existing cap.
+
+Read-limit errors are now typed separately from protocol/credential failures.
+Three browser regressions passed for initial terminal-page continuation,
+connection cancellation and refresh preserving old content/draft focus. Source
+review found background autofocus and two reentrant cancellation ownership bugs;
+all were corrected with regressions and scoped re-review cleared P1/P2 findings.
+User31 mock review and final full verification are in progress.
+
+Fresh simulated user31 verified keyboard continuation from100pages to an empty
+terminalpage101 at390×844 and1440×1000, no partial cards, refresh draftfocus,
+retained timeline and cancellation without errors. Screenshots were visually
+inspected under `/tmp/round31-{mobile,desktop}-{initial,refresh}.png`. No scoped
+blocking UX finding. Minor follow-up: identify the current inbox/outbox and the
+next bounded chunk more clearly. Verdict remains **no full migration** because
+existing Mastodon-account compatibility and private photos are unsupported;
+compatible-C2S-server pilot is plausible. This is simulated feedback, not real
+research. Browserclosed, unowned Vite listener preserved.
+
+The full real suite now passes the first main8443 connect/publish/reply/reconnect
+case with explicit continuation and preserved data. Final suite is still running.
+Codecheck found only a new paragraph typography token-pair issue; apply its small
+CSS fix after browsers finish, then rerun codecheck and scopedhistory browser.
+
+Full browser terminal result:179passed/1failed. Every main8443 case, including
+largehistory reconnect/edit/delete/images, now passes. Corrected18448 Follow and
+Note reception succeeded, but reopening People before Undo left no dialog, so
+Undo was not sent. Investigating this UI race rather than resetting graphstate
+or claiming fullgreen. Dedicated fixture's accepted Follow remains until its
+exact state is verified and explicitly withdrawn for a fresh test.
+
+Additional cancellation audit found that canceling a paused fallback after an
+accepted publish omitted its confirmation notice. RED reproduced it; cancellation
+now applies the already-earned notice without replacing timeline/timestamps or
+retrying the POST.53 focused queue/session/design tests pass. The typography
+pair is corrected; a browser regression for accepted-post cancellation is added.
+
+The remaining Follow failure is not established as a dialog race:10 mocked rapid
+close/reopen cycles all stayed open. A read-only actual adapter probe identified
+an authoritative relationship-read failure instead: Alice18448inbox advertises
+21items, returns20items in both the canonical root and advertised first page,
+and exposes no next link. The strict reader correctly rejects its mismatched
+complete total. Following membership itself has1item/declared1. No cleanup Undo
+was sent: the UI could not establish complete activity evidence. No graphreset,
+guessed next URL or weakened completeness rule was used. Pinned server pagination
+investigation is underway. Earlier successful Follow→Note delivery remains valid;
+full cycle is not currently green once this collection crosses20items.
+
+The added accepted-post cancellation browser fixture initially omitted CORS
+exposure of its Location header; corrected the fixture rather than weakening
+production201/Location requirements. Final scopedhistory andcodechecks running.
+
+Final round31 verification: `npm run check` passes **702 unit tests**, formatting,
+types, production build andSacho. All **4 scoped history browser tests pass**,
+including canceling accepted-post hydration while retaining confirmation and
+sending exactlyonePOST. No active test/browser process remains. Last fullsuite
+result remains179passed/1failed; do not replace it with a scoped success claim.
+
+Source diagnosis identifies the remaining server failure: pinnedgo-ap/filters
+f116eb702ce2 cursor.go emits next.after only when len(col)>maxItems+1. For21items
+withmaxItems20 it does not add the cursor; the nextIRI equals firstIRI and is
+suppressed. ONI setsmaxItems20. This explains the observed20/21 incomplete inbox
+and why strict relationship reads refuse it. No serverpatch/build/restart has
+yet been performed. Next work is the bounded dependency correction and boundary
+regressions, preserving all volumes and client completeness checks.
+
+## Round32 — server pagination boundary correction
+
+Re-read the pinned build pipeline and observed21/20 inbox failure. In an
+isolated copy of filtersf116eb702ce2,21-item complete walks andfiltered21 failed
+before a minimal threshold correction; the entire module suite then passed.
+Root added third-archive preparation, pinnedmodule replacement and exactmodule
+integrity checks (RED→GREEN,9offlineguards). Fresh preparation verified archive,
+patch and source hashes. No runtime change at this stage.
+
+Independent review cleared packaging/isolation but found that the initialfix
+still advertised an empty trailing page whose serialized emptyitems disappear
+whiletotal21 remains. A strictrelationshipreader would correctly reject it.
+Added serializedterminal behavior to the pending serverregression work; no
+clientrelaxation or deployment while that issue remains.
+
+Second pagination correction snapshots the last eligible item before cursor
+reversal and suppresses Next afterthe finaldata page. Serializedterminal and
+before→next regressions wentRED→GREEN; scoped independent review cleared it.
+Fresh rootbuild verified every pinnedhash/module,9offlineintegrity checks,
+fullfilters+index andprocessing/ONI regressions, then built newimage92a7c18775c5.
+Recreated only maintained18448 actors, retainingvolumes andgatewayCA;8443unchanged.
+Actualclient readonlyprobe nowreads all21inboxactivities as20+1 withcorrectNext,
+establishesfollowing1/request1, and returns success. No clientcompleteness
+relaxation or datareset. RealUI flow andfinalchecks pending.
+
+Real maintained18448 browser flow passed in3.8seconds: exact priorFollow cleanup,
+freshFollow, BobNote publication, Alice reception and exactUndo. User32 then
+independently used readonly realUI (OAuth only, no relationship/content writes):
+latestreceivedNote visible, People shows no activefollowing and exactBob target
+asnotfollowing. Desktop1440×1000 andmobile390×844 screenshots inspected; Escape
+restores openerfocus. No scoped UX blocker. Verdict: **compatibleC2S pilot yes,
+fullMastodon migration no** because existingaccountconnection andprivatephotos
+remainunsupported. This is simulated feedback, not realuserresearch. Browser
+closed, unownedVite preserved.
+
+Finalcodecheck passes702unit,format/types/build/Sacho. Maintainedfixture offline
+integrity9checks andbundleSHA256SUMS pass. Final181-browser suite is running;
+its terminalresult is not yetknown. No client behavior changed inround32.
+
+Final round32 verification: **181/181 browser tests pass** with both real local
+fixtures enabled (4.0min), including Follow/reception/Undo, large-history
+continuation, accepted-write cancellation, and real edit/delete/images. Code
+check passes **702 unit tests**, format/types/build/Sacho. The maintained server
+build passed all module regressions; offline integrity **9/9** and bundle hashes
+pass. Docker inspection confirms both18448actors run image92a7c18775c5 with their
+existing nameddata volumes. No active test/reviewer browser remains. Main8443
+was not rebuilt or reset. This completes the pagination correction, not general
+Mastodon account compatibility or private-media support. Goal remains active.
+
+## Round33 — complete relationship continuation and withdrawal handoff
+
+Extended bounded explicit continuation to following membership and inbox/outbox
+request evidence. Partial data never lands as a relationship graph. Canceling
+retains previous evidence but marks it canceled and disables graph actions until
+a fresh complete read. UI names the current collection and keeps actions visible
+in the People footer and account sheet.
+
+Undo is split into complete, cancellable preparation and a single-use POST
+command. The original request and target are captured; read cancellation cannot
+misclassify an already invoked POST as unsent. Accepted receipts survive canceled
+hydration. The shared controller preserves timeline alias identity and uses an
+independent relationship instance. No bearer, cursor or remote body enters UI.
+
+Review found alternate sheet exits that left preparation alive; filter/hide,
+navigation/moderation and self-profile paths now cancel, with RED→GREEN tests.
+Moving to People retains the visible gate and explicitly names its captured
+withdrawal target even when a different Find target is inspected. Independent
+source re-review cleared P1/P2 findings. Narrow13browser checks and733unit plus
+format/types/build/Sacho pass; complete186browser suite is in progress.
+
+Simulated user33 authored and partially ran its mock review, then host descriptor
+exhaustion blocked its tools. Root ran the corrected script to terminal0: mobile
+anddesktop target switching, preflightcancel0POST, acceptedcancel1POST/receipt,
+and both sheet exits pass. No realaccount/fixturewrites inthatreview. Agent's
+visual inspection remained unavailable; root opened screenshots atbothsizes and
+found no clipping. No useragent visualclaim is made. Verdict: better control for
+compatible C2S accounts, not existingMastodon/privatephoto migration. Browserclosed.
+
+Final round33 result: **186/186 browser tests pass** (4.4min), including actual
+Follow/reception/Undo and real Note/image flows; **733 unit tests** plus format,
+types, build andSacho pass. Independent interaction scenarios passed; pixel
+inspection by agents was blocked by descriptor exhaustion, while root opened
+both screenshots and found no clipping. No independent visual sign-off is
+claimed. Test/reviewer browsers are closed, no server configuration changed,
+and existing fixture volumes remain intact. Goal remains active.
+
+## Round34 — Follow preparation and recovery
+
+Own-actor GET503 reproduced an uncertain Follow despite zero POSTs. Follow now
+shares cancellable preparation and a single-use send command. Outbox validation
+and payload capture happen before entering write uncertainty. Explicit failure
+state supports truthful unsent copy and manual retry; POST refusals and unknown
+outcomes retain their separate handling. No automatic retries were added.
+
+Independent source review reported no actionable P1/P2. Five actual-client tests
+cover recovery, cancellation during reads and at handoff, POST403 and single-use
+commands with isolated read signals. Nine relationship browser tests passed.
+Full check passed738unit tests, formatting, types, build andSacho. Full browser
+verification was prevented by host descriptor exhaustion and is now being resumed.
+
+Simulated user34 reviewed current scenarios/copy and opened the older round33
+mobile screenshot, not the round34recovery screen. Verdict: compatible-C2S trial
+yes, main-account migration not yet. Explicit opt-in public profile lookup could
+help identify people before Follow. This is simulated feedback, not real research.
+
+The user selected local ONI as the continuing improvement/verification target.
+Other server interoperability remains uninvestigated; do not block local progress
+on a public server address or imply stock/general interoperability from the
+maintained corrected ONI fixture. Preserve existing actor data and credentials.
+
+## Local ONI follow-up — recipient scope evidence
+
+A fresh independent simulated reviewer accepted public-text trial use but withheld
+full daily-use migration. Their source review found that the two-actor test proves
+public delivery, while the followers-only test proves author-side addressing and
+storage only. They requested actual follower-side text reception within the same
+local ONI fixture. This is a test-coverage gap, not an observed delivery failure.
+No new browser observation or real-user research is claimed. Next: exercise
+followers-only text delivery separately from unsupported private image paths.
+
+Full187browser suite passed (5.1min); final check passed738unit tests and other
+checks. The subsequently expanded actual two-actor test confirmed follower-only
+text visible in Alice's timeline but failed at Undo: People could not refresh
+complete evidence. Diagnostic actual adapter error: collection total mismatch;
+inbox declares32, first20 plus next11, and maxItems100 yields31. Existing green
+checks do not cover this newly exposed case. Client refuses unsafe inference.
+Source review identified query-dependent ONI collection-owner comparison causing
+an extra authorization filter on pages. Server regression/fix is in preparation;
+no deployment, data reset, or client relaxation. This is concrete new evidence,
+not a successful end-to-end result or proof of private-content isolation.
+
+## Local ONI owner-page correction — implemented
+
+The32-row shared-handler regression reproduced31/32 on owner pages (RED). Exact
+resource identity independent of request queries fixes ownership without relaxing
+nonowner item authorization or changing content/page query execution. Fresh bundle
+and full ONI Go suite pass, independent review no findings. Maintained build verifies
+all hashes, nine offline guards and new TestOwnCollection regressions.
+
+Only maintained18448 was updated to58be49b-c2197c547411; original alice/bob data
+volumes and authenticated startup verified. The previously failing actual browser
+Follow → public text → followers-only text → Undo now passes4.6s. The test also
+asserts outgoing followers addressing and noPublic without logging payloads.
+Full187browser suite is running; private media and other server interoperability
+remain unproven. No client invariant was weakened and no data reset was used.
+
+The independent simulated reviewer now supports daily text-focused trial use on
+local ONI: their previous recipient-side followers-only gap is resolved by the
+reported execution and current assertions. Full migration remains withheld. They
+did not independently browse the new run. Next bounded requirement: after Undo
+is reflected server-side, verify a new followers-only post is not delivered, with
+an explicit processing-completion control rather than treating a short empty wait
+as proof. This is simulated judgment, not real-user research or privacy sign-off.
+
+Final verification after maintained ONI deployment: **187/187 browser tests pass**
+(5.3min), including the expanded followers-only reception and Undo regression.
+Full738unit/type/format/build/Sacho check, nine offline guards, filters/processing
+and ONI build regressions also pass. Independent source review has no findings.
+No browser suite remains live; current fixture is58be49b-c2197c547411 with retained
+volumes. Next nondelivery-after-Undo requirement remains explicit and unimplemented.
+
+## Post-Undo nondelivery — deterministic evidence
+
+Added actual synchronous Follow/Accept/Note/Undo processing regression with recording
+transport. Disabling relationship removal fails graph removal and zero Alice-call
+assertions; original restored. Full processing Go suite passes. Local-only opt-in
+terminal observer emits hashes/counts/flags, not content/IRIs/tokens/rawerrors, after
+actual dispatch including zero targets. Async scheduling remains unchanged. Phase
+flags describe returned errors only, not all upstream recipient failures.
+
+Independent code review cleared observer, strict complete-read helpers and bounded
+log parser. Updated verified bundle built and deployed only maintained18448 as
+58be49b-53c0248136ad (Docker6ba4ff935e9ad257ee6a5aee415ec3719ee56361522647b03374cb90e0478586).
+Existing data retained. Actual browser test passes4.8s: baseline received Note and
+terminal positive routing, exactUndo, bothgraphs empty, freshfollowers-only Note's
+completed zero remote routing, and absence in complete Alice inbox. This proves
+that controlled dispatch, not arbitrary future nondelivery/resolution health.
+
+Full738unit/type/format/build/Sacho check passes. Final187browser suite is running.
+Fresh independent simulated user supports daily local text trial but withholds
+sensitive full migration. They reviewed source/reported execution, not a new browser
+or real users. Next missing evidence: direct-read access to a fresh followers-only
+Note for owner, eligible follower, removed follower and anonymous requester. This
+is not a reproduced privacy defect. Keep Alice bearer at Alice origin; do not turn
+that question into cross-origin bearer forwarding or an unrestricted proxy.
+
+Final post-Undo result: **187/187 browser tests pass** (5.8min), including the actual
+async completion-correlated nondelivery scenario. **738 unit tests** plus types,
+formatting, build andSacho pass. Maintained image build regression suites and nine
+offline guards pass. All test handles terminal; no browser remains running. No
+client behavior or asynchronous delivery policy was changed, and no data reset.
+Direct-read privacy remains the next separate evidence gap.
+
+## Direct-read privacy — reproduced defects and fix in progress
+
+Controlled local Note checks: owner directGET200/bodymatch, anonymous directGET
+403/404/no body, but owner response public-cacheable. Existing Bob proxyUrl with
+anonymous caller and that same known Bob Note returned200/bodymatch. All content
+was synthetic; logs contain status/boolean assertions only. No other origins,
+real private content, external accounts or new proxy were involved.
+
+Conservative dynamic no-store/no304 regression is GREEN in prepared ONI; combined
+proxy owner-auth fix and tests are in progress. Browser regression includes valid
+owner, anonymous cold/warm, invalid bearer and no-store checks. It is currently
+RED on deployed53c0248136ad. Client check738unit/type/format/build/Sacho passes;
+that green result does not establish resolution of these server privacy defects.
+
+Privacy corrections applied only to maintained18448, image58be49b-6d69e8571f84.
+Cache policy covers dynamic JSON/HTML/binary, no validators/304. Proxy gate requires
+exact verifiedlocalowner before targetfetch, with separate strictcookieOrigin guard
+because broad credentialedCORS could otherwise bypass intent. UpstreamSetCookie
+andvalidators stripped. Static assets/clientproxy support unchanged. Independent
+re-review clear. Taggedtests initially showed sharedcache interference; per-case
+unique targets fixed tests while preserving positive1/negative0 fetch assertions.
+Exacttaggedsubset twice, fullGo suite, freshbundle/hash/build andnineguards pass.
+
+Actual privacy browser regression now passes5.0s: ownerdirect success, anonymous
+direct denial, anonymous proxy cold/warm denial, invalidtoken denial, ownerproxy
+success/privateNoStore, plus Follow/reception/Undo/nondelivery. EarlierRED had
+anonymous200/bodytrue, so this is a verified fix rather than a missing-evidence
+claim. No prior cachedcopies are retracted; stock8443 andstopped18449 unchanged.
+Final187browser suite is running; currentclientcheck738unit andothergates passed.
+
+Fresh simulated reviewer supports daily text trial on the maintained fixture,
+not comprehensive privacy certification/full migration. They reviewed source and
+reported execution, without a new browser or real-user research. Next bounded
+requirement: two-person followers-only reply exchange; Alice replies to Bob's
+received Note, Bob finds it in received replies and correct refreshed conversation;
+assert parent IRI, noPublic, actual reception and anonymous-read protection.
+Existing real reply test is self-reply; this is a coverage gap, not a defect claim.
+
+Final privacy verification: actual expanded privacy/lifecycle regression passes5.0s;
+client738unit/type/format/build/Sacho and finalmaintained image regressions pass.
+Fullbrowser run:186pass, one stock8443 initial-read30s timeout before publishing.
+The unchanged failed connect/publish/reply/reconnect case passes isolated51.8s.
+This is not reported as a single fullygreen187run. No timeout increase, volume
+reset or server/client workaround was applied. Bothhandles terminal; no browser
+remains active. Current image and original actorvolumes verified byDockerinspect.
+
+## Two-person replies and recipient disclosure
+
+Expanded actual local ONI test passes: Alice replies to Bob's followers-only Note,
+reply keeps parentIRI and exact Bob-only directaddress/noPublic, Bob finds it in
+received replies afterrefresh and opens parent+reply conversation. Owner can read
+the reply; anonymous cannot. Existing lifecycle/nondelivery/privacy checks remain.
+
+Independent simulated review found misleading composer scope explanations for
+parent mentions. Added framework-free reply-audience model reusing canonical
+replyParticipants; no duplicated addressing/network logic inUI. Composer displays
+labels and fullIRIs, excludes self/dedupes, distinguishes followers+participants
+from direct participants, and handles empty/unavailable sets explicitly. No sending
+semantics changed. Eight unit regressions, two width-specific three-person browser
+checks prove displayed list equals actualPOSTtargets, including a longIRI.
+
+Independent source review no P1/P2. Independent user-perspective reviewer opened
+both mock390/1440screenshots and found no blocking UX issue for this flow; supports
+local daily-conversation trial, not unconditional migration/real-user research.
+Minor nextissue: private ImagePicker currently prioritizes connection-setting hint
+though privateuploads unsupported; audience restriction should takeprecedence.
+Current746unit plus types/format/build/Sacho pass; actualexpandedrealtest6.0s and
+newbrowserdisclosure2tests pass. Standard UI suite running; includesnewtestfile.
+
+Final recipient-disclosure verification: standardUI suite **148/148 passes**
+(1.5min); completecheck **746 unit tests**, types, formatting, build andSacho pass.
+Actualtwoactorprivate reply plus existingsecurity/lifecycle passes6.0s. Independent
+mock screenshot review bothwidths clearedflow. No browser/testhandlesremainlive.
+No server/network/addressing changes thisiteration; no fullstockbrowser rerun is
+claimed. Prior stocklarge-history timeout and isolatedpass remain documented.
+
+## Private image hint priority
+
+Both390/1440browser cases reproduced misleading settings guidance in a directreply
+when ONI images were disabled (RED). ImagePicker now explains disallowed audience
+before capability settings. Existing selection/upload/cancellation guards unchanged.
+Two width regressions confirm scopehint/no settingsCTA, disabledimagebutton and
+successful textreply; image-authoring suite also passes (ninebrowser checks total).
+Independent source review no findings. Independent simulated reviewer inspected
+both regenerated mock screenshots: misunderstandingresolved, no newblockingUX;
+would use localONI text conversations but keep another client for privateimages.
+This is a capabilitylimit, not anothercopydefect or fullmigrationapproval.
+
+Next iteration should investigate private media on the corrected maintainedserver,
+using prior evidence and explicit privacy/access invariants, rather than repeatedly
+polishing this settledhint. Do not enable privateuploads until recipientaccess,
+anonymous/nonrecipientdenial, caching and recovery are proven; no unrestricted
+proxy or cross-origin bearer. Old18449 evidence remains valid for thatoldimage,
+not automatically the currentprivate-response-corrected18448 runtime.
+
+## Private media corrected-image recheck and raster transport
+
+Reused preserved isolated18449 data on6d69: acceptedFollow and four known synthetic
+Images, zero newCreate/Follow. Owner PNG bytes/private-no-store correct; anonymous
+origin restricted404 andproxy403 confirm prior fixes. Directrecipient proxymetadata
+200 butPNGrequestedJSON; followerproxy404 despitebothmembers. This changed the
+next action from copy polish to two concrete server capability gaps.
+
+Implemented exact PNG/JPEG/WebP proxyAccept before signing; 2xx response requires
+singlematchingMIME, otherwise reject withoutbody. Metadata default unchanged.
+TaggedGo fullsuite, duplicate/mismatchedMIME and sameIRI metadata→PNG tests pass;
+independent source review clear. Built verifiedcandidate d7e4a3883690 and applied
+ONLY18449. Rereading sameImages now gives exact direct/public proxyPNG, metadata
+JSON; anonymous remains403, self-only andfollowers still404. Main18448 unchanged.
+
+Simulated user's current verdict remains no private-image migration. Acceptance
+requires full restrictedreply→eligiblefollowerload/hide/retry and authorization,
+cleanup/draft/audience consistency. Direct-only plumbing is not a substitute.
+Storage-aware followergrant needs complete current membership and block evidence;
+FS cache/filter behavior must be resolved before implementing that access check.
+No private client uploads/loading were enabled. Full746unit/types/format/build
+check and Sacho pass, plus nineofflineguards and imagebuildserverregressions.
+The isolatedprobe was stopped after testing with all evidence volumes retained.
+
+## Follower resource authorization review loop
+
+Independent simulated user review (not real research) accepts trial parallel use
+for local text conversations, but not migration of private photo conversations.
+The next bounded priority is the retained18449 follower-only image access matrix,
+without adding Alice as a direct recipient. Client private images remain disabled.
+
+Code review found filesystem-expanded nested objects could disclose private child
+content through a follower-readable parent. Projection now preserves parent text
+and alt text while requiring separate authorization for nested resource IDs;
+minimal inline links retain type/href only. Independent scoped re-review cleared
+the mitigation after real-FS regressions. The build's original-module guard caught
+a new test's indirect dependency import; tests now use the existing storage API,
+with the guard unchanged. Runtime results are recorded separately below.
+
+### Follower access gate completed on isolated18449
+
+The retained-image matrix now passes eligible follower access, warm Block denial,
+Undo Block restoration, Undo Follow denial with direct-recipient positive control,
+and restored Follow access. Exact PNG bytes, alt text, no-store and anonymous/self
+denial were verified. Four exact graph writes, no retries and no new content.
+The probe resumed from a confirmed checkpoint after adapting to ONI empty-page
+aliases and deletion of the original Follow on Undo; evidence documents both
+interruptions rather than claiming a single uninterrupted run.
+
+Next gate is bounded authenticated client/proxy loading with redirect/body/MIME/
+byte validation and lifecycle cleanup, followed by restricted upload/draft/audience
+consistency. Private images remain disabled; see private-media-evidence.md for
+results. Do not rerun the completed checkpoint-specific resume.
+
+Post-matrix independent simulated user verdict: text-only parallel use remains
+reasonable; photo-conversation migration is still withheld because the app feature
+is disabled. Next requested concrete flow: one followers-only image reply with
+alt text, received by a follower who is not separately addressed, explicit
+open/hide, failure-safe draft/upload reuse and disconnect cleanup. This is
+simulated source/evidence-based judgment, not real research or a browser trial.
+
+## Authenticated private image reading in the app
+
+Added application ImageReadGateway and current-timeline attachment authority;
+ONI adapter uses only advertised same-origin HTTPS proxy, token confinement,
+redirect rejection,5MiB stream bound,10-second whole-read deadline and raster
+MIME/header checks. Domain header policy is shared with upload validation. Pure
+presentation resource controller owns generation/cancel/release; Solid browser
+bridge owns object URLs. Restricted ONI attachments use it only on explicit click.
+Public/unlisted image behavior is unchanged; restricted upload remains disabled.
+
+Independent code review found no P1/P2. Client tests cover late completion after
+hide/disconnect/replacement, decodefailure and resource release, bounded and
+stalled bodies, both cancellation sources, invalid targets/proxy and MIME.
+Mock browser checks passed390/1440 open/hide/disconnect, alt, denial and explicit
+retry. Initial mobile test needed the existing account-menu disconnect route;
+product behavior did not need a workaround.
+
+Server proxy hardening is packaged in candidate81f68e4a59de
+(Docker77d9fcffd3c72730746167790e7a24c5ecc5969f00d32fcda0bebc74bf5b9c5c),
+applied ONLY18449 with retained data. Proxy-specific signed client rejects
+redirects and bounds every status body before retries/output, with one10-second
+deadline; it bypasses private cache/debug-body wrappers. Federation client is
+unchanged. Independent source review/fulltagged Go/build regressions pass.
+
+Actual browser test tests/private-media-c2s.spec.ts passed against the existing
+received followers Note/Image: no automaticload; click→ownproxy→blobURL→decoded
+1pixel→hide→disconnect. Zero directimage requests toBob and zero bearer leakage.
+No new Note/Image/relationship writes were needed. Test requires explicit
+KIMINO_PRIVATE_MEDIA_FIXTURE_DIR=/tmp/kimino-private-media andKIMINO_FOLLOW_PORT=18449;
+it is separate from stockfixture tests.
+
+Post-implementation simulated user review (not real research) expands parallel
+use to receiving private photos and replying in text; full photo-conversation
+migration remains withheld until one restricted image reply can be authored.
+Next: identical Image/Note addressing, audience-bound uploadreceipt reuse, failed
+Note draft retention without duplicate/public uploads, then actualbrowser
+restrictedreply→eligiblefollowerread. Do not repeat serveraccess investigation.
+
+Final verification checkpoint: npm run check passed811 unit tests plus format,
+types, build and Sacho; full independent UI suite passed151/151 (1.6min). The
+actual isolated ONI private-image browser test passed1/1. Bundle checksums and
+git diff --check pass. Isolated18449 is stopped, volumes/CA/data retained.
+Main18448 remains6d69; source and isolated image are81f68e4a59de. No live root
+process/test/browser handles remain, no commit/push. Next work is restricted image
+upload addressing/receipts and the complete authored image reply, not read-side
+research. Broad product goal stays active.
+
+## Restricted image reply implemented and verified
+
+Application snapshots submissions before queuing, derives Image addressing from
+the clamped Note and reply participants, and binds receipts to copied canonical
+to/cc sets. Changed recipients cannot reuse uploads; confirmed unresolved or
+uncertain uploads still never auto-retry. The ONI adapter verifies wrapper and
+Image addressing and retains verified ID/MIME/audience associations for Note
+publication. Independent review found additional audience/bto/bcc could bypass
+to/cc checks; RED regressions reproduced it, then both wrappers and objects were
+restricted to exact to/cc and scoped re-review cleared the P1.
+
+Private authoring requires explicit ONI mode and exact generator Service marker
+urn:kimino:oni:private-media:1. Unmarked stock ONI stays disabled. The marker is
+response-only, configured local root only, opt-in KIMINO_PRIVATE_MEDIA_CAPABILITY=1,
+preserves generators/storage and is an assertion, not security attestation.
+Refresh removes the UI/application gate if the actor stops advertising support.
+
+Candidate ac17f3e26faa (Docker801b86d3cc76878327a2e86a764ff417a8ad7563bc2c2a034ff2ff1ff079b57b)
+was built and applied only18449. Main18448 is still6d69. TaggedGo/build tests passed.
+Mockbrowser public/restricted/recovery tests passed11/11;390/1440 captures at
+/tmp/kimino-private-compose-390.png and-1440.png show actual draftscope, alt,
+pre-upload state and restricted orphan-upload disclosure.
+
+Actual tests/private-media-c2s.spec.ts: Bob replied to his existing followers-only
+parent with a new Image; Alice remained only a follower, never a direct recipient.
+The first Note POST was explicitly injected503 before reaching ONI; actualImage
+Create/hydration succeeded. Retrying retained the draft and submitted no second
+Image:1ImagePOST,2Noteattempts, matchingfollowers-onlyto/emptycc throughout. The
+final Note reached Alice; alt text and explicitblobPNGdecode/hide passed.
+Initial run stopped after acceptedwriting because the test used the wrong refresh
+button name; selector corrected and a new synthetic specimen passed1.1s. Existing
+received-image regression also passed. Earlier accepted objects were preserved.
+
+Independent simulated user inspected both screenshots and concreteflow evidence:
+no boundedUXblocker; would try moving photo conversations among localfollowers.
+This is not realresearch or proof of all conversation types/history/server
+compatibility. User-deferred externalserverresearch is not a localacceptancegate.
+
+## Latest verified local state
+
+The local private-media iteration is implemented. Maintained18448 now runs
+kimino-oni-follow:58be49b-ac17f3e26faa, preserving alice-data/bob-data volumes and
+CA. Isolated18449 is stopped with data retained. Stock8443 is unchanged. Earlier
+chronological statements below about private authoring being disabled or18448
+still running6d69 are historical and superseded by this checkpoint.
+
+Validation:836 unit tests plus format/types/build/Sacho passed;153/153 independent
+UI tests passed. Actual authored followers-image reply/recovery/reception passed
+on18449; actual maintained18448 Follow→public/followers reception→private text
+reply→Undo→fresh-post nondelivery regression passed8.9s after promotion. Exact
+image/volume identities verified; bundle checksums and offlineguards passed.
+Independent code review cleared the additional-addressing P1 after regression
+tests. Independent simulated user inspected390/1440 screens and would try local
+photo conversations, with no scopedUXblocker. This is not real user research or
+a claim of stockONI/MastodonREST/externalserver/full-history migration support.
+
+No outstanding required implementation work was identified by the local-scope
+completion audit; other-server research remains explicitly deferred by the user.
+No commits, pushes or publication. The sections below retain the investigation
+history and earlier evidence; do not restart completed probes from them.

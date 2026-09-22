@@ -2,7 +2,12 @@ import './logging';
 import { Errored } from 'solid-js';
 import { render } from '@solidjs/web';
 import App, { RenderFailure } from './app';
-import { createSession, browserPreferences, browserSessionStore } from './bootstrap';
+import {
+  createSession,
+  browserPreferences,
+  browserSessionStore,
+  browserAccountDiscovery,
+} from './bootstrap';
 import './app.css';
 
 render(
@@ -12,6 +17,7 @@ render(
         session={createSession()}
         preferences={browserPreferences}
         sessionStore={browserSessionStore}
+        accountDiscovery={browserAccountDiscovery}
       />
     </Errored>
   ),

@@ -123,6 +123,19 @@ To be released.
     host while reconnecting.
  -  Escape no longer folds 관리 away while the delete confirmation it opened is
     still on screen.
+ -  Allow verified current followers to retrieve followers-only text and images
+    in the experimental local ONI fixture, rejecting incomplete membership
+    evidence and keeping nested private objects behind separate access checks.
+ -  Compose public and unlisted image posts and replies with an explicit ONI
+    connection option. Select up to four local images, add alternative text,
+    and retain drafts in memory. Confirmed uploads are reused after a failed
+    post, and uncertain uploads are never automatically repeated. Private
+    images and other servers’ upload conventions remain unsupported.
+ -  Continue reading large follow lists and request histories on demand.
+    Stopping a read preserves earlier records without treating them as fresh
+    evidence. Withdrawal preparation identifies the exact account and sends
+    nothing until validation finishes; accepted requests remain confirmed if
+    later reading stops.
  -  Editing a post that no longer exists on the server no longer brings it
     back. Before an edit is sent the client asks the server whether it still
     holds the post; when it does not - because another tab or another client
@@ -170,6 +183,20 @@ To be released.
  -  On a phone the toast is a strip directly above the tab bar, lets every tap
     through and has no close control; on the desktop it sticks to the bottom
     of the right column so a long thread never pushes it out of view.
+ -  Explain failed image loads while preserving their descriptions. Readers can
+    explicitly retry or hide an image without losing keyboard focus.
+ -  Explain the audience restriction before image setup instructions in private
+    replies, so enabling ONI image settings is not presented as a way to attach
+    an unsupported private image.
+ -  Explain timeline-only activity counts without calling supported Follow
+    operations unsupported. Valid Follow withdrawals no longer appear as
+    rejected reaction withdrawals; malformed and forged evidence remains
+    excluded separately.
+ -  Find a known person by @name@server before following them. Account lookup
+    sends no token or cookies and requires an explicit action; the returned
+    address is reviewed before a separate Follow. Empty timelines now offer a
+    first-follow entry point. Exact Actor URL entry remains available when a
+    server cannot be queried from the browser.
  -  Find replies and mentions addressed to you under "나에게 온 답글", read
     relative times, open a reply's original conversation in place, and use one
     clearly labeled preview mode with a single exit control.
@@ -180,6 +207,16 @@ To be released.
     per action what needs an account; the header drops the update stamp, the
     preview line is thinner, and a render failure shows a readable message
     instead of a blank page.
+ -  Fix pagination in the explicitly corrected local ONI fixture when a
+    collection contains one more item than a page. Follow status can be
+    verified without dropping the final activity or requesting an invalid empty
+    trailing page.
+ -  Follow accounts from people management or an author profile, inspect pending
+    and accepted requests, and withdraw the original request through C2S.
+    Refresh the timeline to read delivered posts. Failed reads preserve
+    confirmed writes; uncertain requests are never automatically repeated. A
+    separate corrected two-actor ONI fixture verifies follow, reception and
+    withdrawal; existing Mastodon account compatibility remains unsupported.
  -  Follow conversations inside Kimino, read the original while replying, and
     keep unfinished drafts when moving between views within the same tab.
  -  Explore a clearly labeled example timeline before connecting an account.
@@ -188,6 +225,18 @@ To be released.
     accessible even when their posts are absent from the current timeline.
  -  Read and use timeline actions more comfortably with larger type, clearer
     contrast, and improved mobile spacing.
+ -  Hide an author's loaded notes across the timeline, search, saved cards and
+    conversations, and restore them from the hidden-author manager. Saved links
+    and drafts remain intact. Hidden-author IDs are remembered per account in
+    this browser; preview changes stay in memory. This does not block anyone on
+    the server, stop delivery, or sync to other devices.
+ -  Improve the experimental ONI retrieval proxy's PNG, JPEG, and WebP response
+    negotiation, rejecting mismatched successful responses before forwarding
+    their bodies.
+ -  In ONI mode, explicitly open received private raster images through the
+    account server, with bounded reads and no bearer sent to the image origin.
+    Hiding an image or leaving the account releases its local display resource;
+    failed reads preserve alternative text and can be retried explicitly.
  -  In the conversation column beside the timeline, 삭제 and the other controls
     on your own post are no longer cut off by the edge of the panel. The row
     wraps there the way it already does on a phone, so every control - and the
@@ -220,6 +269,9 @@ To be released.
     search. The skip link's target is named symbolically by the selectors.
     Note copy moved out of `note-body.ts` into `copy-content.ts`; no words
     on screen changed.
+ -  Keep follower-addressed posts in the maintained local ONI inbox when reading
+    later pages, so complete relationship reads and follow withdrawal remain
+    available after receiving followers-only text.
  -  Keyboard shortcuts stay quiet while a sheet is open: with the author or
     account sheet up, `r` no longer opens a reply composer behind the backdrop
     and `?` no longer stacks the shortcut list on top of it. `?` still closes
@@ -247,6 +299,10 @@ To be released.
     alone.
  -  When the shortcut list closes and the control that opened it has left the
     page, focus goes to the page heading rather than being lost.
+ -  Large timelines can pause at the read budget and continue on request without
+    restarting earlier pages. Canceling keeps the previous timeline and drafts;
+    incomplete reads are never presented as complete. Read limits are explained
+    separately from malformed server responses.
  -  Like and share posts with your connected account and see who reacted to each
     post. Servers that refuse to withdraw a reaction are reported plainly
     instead of failing silently.
@@ -269,6 +325,10 @@ To be released.
     how many loaded posts are left, and a "맨 위로" control appears once you
     have scrolled a couple of screens and takes you - and the keyboard focus -
     back to the top of the list.
+ -  Manage followed people with counted status filters and a local name/address
+    search. Separate finding new people from the existing list, avoid repeated
+    unknown profile addresses, and keep close and refresh controls visible while
+    scrolling. Pending and uncertain operations stay under needs-attention.
  -  Nothing on the page is disabled while a like, share, reply, edit or
     deletion is being sent. A second action asked for while one is still on
     its way used to be refused ("진행 중인 요청이 끝나면…") or, for a moment,
@@ -299,6 +359,10 @@ To be released.
     navigation uses the brand green, the connect form starts empty with the
     local server address as its placeholder, and the phone preview banner wraps
     instead of clipping.
+ -  On an explicitly supported local ONI server, attach images to followers-only
+    and direct replies without widening their audience. Reuse confirmed uploads
+    after a failed post only when the recipients still match; preserve drafts
+    and explain when an old upload cannot be reused.
  -  One visual system across the app: a single spacing, type, weight and radius
     scale, a handle that no longer looks louder than the post it belongs to,
     and icons at one size per context. The composer's buttons no longer break
@@ -362,15 +426,40 @@ To be released.
     not editable: a published post keeps exactly the people it was sent to.
     A post the server reports as updated after publication is marked "수정됨"
     with the time of the edit.
+ -  Protect private content in the maintained local ONI fixture: dynamic
+    resource responses use private, no-store caching, and the existing
+    retrieval proxy requires the verified local owner before fetching a
+    resource.
  -  Read your ActivityPub timeline, publish public posts, and reply to
     conversations by connecting a C2S-compatible account. Kimino keeps your
     access token only in the current tab and filters unsafe content before
     displaying posts.
  -  Run the included local ONI instance with Docker Compose to try the client
     without a hosted account.
+ -  Recover from failures before sending a Follow without an uncertain-result
+    lock. Preparation and transmission have distinct status text; a manual retry
+    is available when no request was sent.
  -  Replies in a conversation now read oldest-first, relative timestamps keep
     ticking while the page stays open, and a rejected post can no longer show an
     error after you have already switched accounts or left the session.
+ -  Show the original author and mentioned accounts that will receive a reply
+    before posting, with audience wording that distinguishes those recipients
+    from the writer's followers.
+ -  Start with a clearly labeled read-only preview before entering account
+    credentials. The connection form uses an account URL example and a
+    plain-language tab retention option; storage details remain available.
+ -  Opening a reply or edit keeps the writing field visible on short screens.
+    On phones, the form scrolls clear of the bottom navigation so its submit
+    button is reachable when the form fits. A focused draft also stays visible
+    when the window becomes shorter after it opens.
+ -  Stop reporting valid own ONI Image upload activities as rejected posts.
+    Uploaded raster objects remain unrendered while their attached Notes remain
+    visible. Identity and malformed-activity checks and explicit image loading
+    are preserved.
+ -  Switching accounts no longer triggers an unnecessary timeline reload when
+    the new account's first write fails. Withdrawing a reaction after disconnect
+    now reports that the account is not connected instead of an unexpected
+    error.
  -  The card shortcuts (j/k, the arrows, Escape, r, s, l, b) now work from any
     control inside a card, not only from the card itself: after closing a reply
     box with Escape, j moves on from the reply button instead of doing nothing.

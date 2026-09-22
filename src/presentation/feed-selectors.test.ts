@@ -701,3 +701,97 @@ describe('round 17: a parent that is gone, the foot under a search, and the dept
     expect(threadCue({ parentAuthor: undefined, note: { author: me } }, self)).toBe('');
   });
 });
+
+describe('hidden authors reading projection', () => {
+  it('excludes hidden authors from search, saves, conversation, parent index and reply peek', () => {
+    const local = {
+      ...initialLocalState(),
+      muted: [notes[1].author, me],
+      saved: ['n2', 'unloaded'],
+      focusedNoteId: 'n1',
+    };
+    const state = deriveFeedState(remote(), local);
+    expect(state.mutedAuthors.map((a) => a.id)).toEqual([notes[1].author]);
+    expect(state.conversation?.descendants.map((n) => n.note.id)).not.toContain('n2');
+    expect(state.byId.has('n2')).toBe(false);
+    expect(state.hiddenNoteIds).toEqual(new Set(['n2']));
+    expect(state.missingSaved).toEqual(['unloaded']);
+    expect(state.all.map((n) => n.id)).toContain('n1');
+    expect(repliesPeek(state).map((n) => n.id)).not.toContain('n2');
+    expect(deriveFeedState(remote(), { ...local, query: 'reply' }).notes).toEqual([]);
+    expect(deriveFeedState(remote(), { ...local, view: 'saved' }).notes).toEqual([]);
+    expect(remote().timeline?.notes).toHaveLength(5);
+  });
+  it('marks hidden parents without making their bodies available and restores without changing saves', () => {
+    const child = { ...notes[2], inReplyTo: 'n2' };
+    const snapshot = remote({
+      timeline: { ...remote().timeline!, notes: [...notes, { ...child, id: 'child' }] },
+    });
+    const local = {
+      ...initialLocalState(),
+      muted: [notes[1].author],
+      focusedNoteId: 'child',
+      saved: ['n2'],
+    };
+    const state = deriveFeedState(snapshot, local);
+    expect(state.conversation?.missingAncestor).toBe('n2');
+    expect(state.hiddenNoteIds.has(state.conversation!.missingAncestor!)).toBe(true);
+    expect(state.conversation?.ancestors).toEqual([]);
+    expect(
+      deriveFeedState(snapshot, { ...local, muted: [] }).conversation?.ancestors.map((n) => n.id),
+    ).toEqual(['n1', 'n2']);
+  });
+});
+
+describe('empty lists caused by author hiding', () => {
+  const local = () => ({ ...initialLocalState(), muted: [notes[1].author] });
+  it('explains saved lists and matching searches emptied by hiding', () => {
+    expect(
+      deriveFeedState(remote(), { ...local(), view: 'saved', saved: ['n2'] }).emptyBecauseHidden,
+    ).toBe(true);
+    expect(deriveFeedState(remote(), { ...local(), query: 'reply' }).emptyBecauseHidden).toBe(true);
+    expect(
+      deriveFeedState(remote(), { ...local(), authorFilter: notes[1].author }).emptyBecauseHidden,
+    ).toBe(true);
+  });
+  it('does not blame hidden authors for unrelated scopes, no matches or deleted notes', () => {
+    expect(deriveFeedState(remote(), { ...local(), query: 'not present' }).emptyBecauseHidden).toBe(
+      false,
+    );
+    expect(
+      deriveFeedState(remote(), { ...local(), view: 'saved', saved: ['unloaded'] })
+        .emptyBecauseHidden,
+    ).toBe(false);
+    expect(
+      deriveFeedState(remote(), { ...local(), authorFilter: 'https://absent.example/a' })
+        .emptyBecauseHidden,
+    ).toBe(false);
+    expect(
+      deriveFeedState(remote(), { ...local(), query: 'reply', gone: ['n2'] }).emptyBecauseHidden,
+    ).toBe(false);
+    expect(
+      deriveFeedState(remote(), { ...local(), query: 'reply', muted: [] }).emptyBecauseHidden,
+    ).toBe(false);
+    expect(deriveFeedState(remote(), local()).emptyBecauseHidden).toBe(false);
+  });
+});
+
+it('offers first-follow guidance only in an unfiltered empty real timeline, never as a hidden or search result', () => {
+  const snapshot = remote();
+  const empty = { ...snapshot, timeline: { ...snapshot.timeline!, notes: [] } };
+  const local = initialLocalState();
+  expect(deriveFeedState(empty, local).firstFollow).toBe(true);
+  for (const change of [
+    { view: 'saved' as const },
+    { view: 'replies' as const },
+    { query: 'nobody' },
+    { authorFilter: me },
+  ])
+    expect(deriveFeedState(empty, { ...local, ...change }).firstFollow).toBe(false);
+  expect(deriveFeedState({ ...empty, demo: true }, local).firstFollow).toBe(false);
+  expect(deriveFeedState({ ...empty, actor: undefined }, local).firstFollow).toBe(false);
+  expect(deriveFeedState({ ...empty, connecting: true }, local).firstFollow).toBe(false);
+  expect(
+    deriveFeedState(snapshot, { ...local, muted: notes.map((note) => note.author) }).firstFollow,
+  ).toBe(false);
+});

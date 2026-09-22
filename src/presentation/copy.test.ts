@@ -10,7 +10,7 @@ import {
   reachLine,
   refusedActivities,
   syncSummary,
-  unsupportedActivities,
+  unshownActivities,
 } from './copy';
 
 const now = Date.parse('2026-09-09T00:10:00Z');
@@ -39,23 +39,25 @@ describe('what the timeline says about its own load', () => {
     expect(lastChecked('2026-09-09T00:05:00Z', now, true)).toBe('마지막 부분 확인 5분 전');
     expect(lastChecked(undefined, now, true)).toBe('아직 확인 전');
     expect(syncSummary('2026-09-09T00:05:00Z', 2, now, true)).toBe(
-      '마지막 부분 확인 5분 전 · 미지원 활동 2개',
+      '마지막 부분 확인 5분 전 · 타임라인 미표시 활동 2개',
     );
   });
   it('admits dropped activities in words, and stays quiet when none were dropped', () => {
-    expect(unsupportedActivities(0)).toBe('');
-    expect(unsupportedActivities()).toBe('');
-    expect(unsupportedActivities(3)).toBe('미지원 활동 3개는 표시하지 못했어요');
+    expect(unshownActivities(0)).toBe('');
+    expect(unshownActivities()).toBe('');
+    expect(unshownActivities(3)).toBe(
+      '타임라인에 표시하지 않는 활동 3개가 있어요. 팔로우 같은 관계 활동이나 이 타임라인에서 해석하지 않는 유형이 포함될 수 있어요.',
+    );
   });
-  it('counts refused activities apart from unsupported ones, and stays quiet at zero', () => {
+  it('counts refused activities apart from unrendered types, and stays quiet at zero', () => {
     expect(refusedActivities(0)).toBe('');
     expect(refusedActivities()).toBe('');
     const one = refusedActivities(1);
-    // Refused for safety, and said as such: not a gap in what this client supports.
-    expect(one).toContain('안전을 위해 거절한 활동 1개');
-    expect(one).toContain('미지원이 아니라');
-    expect(one).not.toBe(unsupportedActivities(1));
-    expect(refusedActivities(4)).toContain('거절한 활동 4개');
+    // Invalid format or ownership evidence is not an unsupported-type claim.
+    expect(one).toContain('활동 1개를 제외했어요');
+    expect(one).toContain('활동 형식이나 작성자 정보를 확인할 수 없어');
+    expect(one).not.toBe(unshownActivities(1));
+    expect(refusedActivities(4)).toContain('활동 4개를 제외했어요');
   });
   it('counts everything withheld as one quiet number, silent at zero', () => {
     expect(hiddenActivities(0, 0)).toBe('');
@@ -66,7 +68,7 @@ describe('what the timeline says about its own load', () => {
   });
   it('keeps the tooltip summary built from the same two parts', () => {
     expect(syncSummary('2026-09-09T00:05:00Z', 2, now)).toBe(
-      '마지막 확인 5분 전 · 미지원 활동 2개',
+      '마지막 확인 5분 전 · 타임라인 미표시 활동 2개',
     );
   });
 });

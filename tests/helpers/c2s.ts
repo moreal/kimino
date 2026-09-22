@@ -12,15 +12,43 @@ export const readCredentials = (): Credentials =>
 /** How long a full walk of the grown fixture outbox may take under load. */
 export const WALK = 30000;
 
+/** Avoid putting a bearer in Playwright action timeout metadata. Real suites disable traces. */
+export async function enterToken(page: Page, token: string) {
+  const field = page.getByLabel('액세스 토큰');
+  await expect(field).toBeEditable();
+  await field.evaluate((element, value) => {
+    (element as HTMLInputElement).value = value;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  }, token);
+}
+
 /** Connects through the form and waits for the first card of the full walk. */
 export async function connect(page: Page, credentials: Credentials) {
   await page.goto('/');
   await page.getByLabel('Actor URL').fill(credentials.actorUrl);
-  await page.getByLabel('액세스 토큰').fill(credentials.token);
+  await enterToken(page, credentials.token);
   await page.getByRole('button', { name: '연결하기', exact: true }).click();
   // Connecting is the full walk of the fixture's outbox (hundreds of activities, dozens of
   // pages), which takes several seconds when other suites share the machine.
-  await expect(page.locator('.note-card').first()).toBeVisible({ timeout: WALK });
+  await finishInitialRead(page, page.locator('.note-card').first());
+}
+
+/** Explicitly exercise continuation on the preserved large fixture, with a bounded test allowance. */
+export async function finishInitialRead(page: Page, ready: Locator) {
+  let chunks = 0;
+  await expect
+    .poll(
+      async () => {
+        const proceed = page.getByRole('button', { name: '이어서 읽기', exact: true });
+        if (await proceed.isVisible()) {
+          expect(++chunks).toBeLessThanOrEqual(3);
+          await proceed.click();
+        }
+        return ready.isVisible();
+      },
+      { timeout: WALK },
+    )
+    .toBe(true);
 }
 
 /** Presses 수정 or 삭제 on my own card; the two fold behind 관리 where the action row is narrow. */

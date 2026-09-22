@@ -1,3 +1,5 @@
+import { discoveryCopy } from '../presentation/account-discovery';
+import { readingCopy } from '../presentation/copy-reading';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 import type { TimelineNote } from '../domain/social';
 import type { FeedState, FeedViewModel } from '../presentation/feed-view-model';
@@ -10,7 +12,7 @@ import {
   lastChecked,
   reachLine,
   refusedActivities,
-  unsupportedActivities,
+  unshownActivities,
 } from '../presentation/copy';
 import { feedFootLine } from '../presentation/feed-selectors';
 import { shortcutFor, type ShortcutAction } from '../presentation/keyboard';
@@ -32,7 +34,12 @@ export default function FeedList(props: {
   /** The session reminder is shown here, under the composer (narrow layouts). */
   sessionHint?: boolean;
 }) {
-  const empty = () => emptyState(props.state.view, props.state.query, !!props.state.authorFilter);
+  const empty = () =>
+    props.state.firstFollow
+      ? { heading: discoveryCopy.firstHeading, body: discoveryCopy.firstBody }
+      : props.state.emptyBecauseHidden
+        ? readingCopy.hiddenEmpty
+        : emptyState(props.state.view, props.state.query, !!props.state.authorFilter);
   const now = useClock();
   let list: HTMLElement | undefined;
   let statusEl: HTMLElement | undefined;
@@ -100,7 +107,15 @@ export default function FeedList(props: {
     if (!action) return;
     const toggleHelp = action === 'help' && props.state.helpOpen;
     const inDialog = event.target instanceof Element && !!event.target.closest('[role="dialog"]');
-    if (!toggleHelp && (props.state.actorSheet || props.state.helpOpen || inDialog)) return;
+    if (
+      !toggleHelp &&
+      (props.state.actorSheet ||
+        props.state.helpOpen ||
+        props.state.moderationOpen ||
+        props.state.peopleOpen ||
+        inDialog)
+    )
+      return;
     if (perform(action, event)) event.preventDefault();
   };
   window.addEventListener('keydown', onKeyDown);
@@ -129,7 +144,7 @@ export default function FeedList(props: {
     props.vm.showMore();
     if (last) queueMicrotask(() => statusEl?.focus({ preventScroll: true }));
   };
-  const dropped = () => unsupportedActivities(props.state.timeline?.diagnostics.ignored ?? 0);
+  const dropped = () => unshownActivities(props.state.timeline?.diagnostics.ignored ?? 0);
   /** Activities the client understood and refused; said apart from the unsupported ones. */
   const refused = () => refusedActivities(props.state.timeline?.diagnostics.rejected ?? 0);
   /** What the client read from the server's own collections, and what it could not reach. */
@@ -156,6 +171,17 @@ export default function FeedList(props: {
               `vm.draft`: a plain snapshot read would freeze the counter and the value. */}
           <Composer
             draft={props.state.drafts.new ?? ''}
+            options={props.state.composeOptions.new}
+            onOptions={(value) => props.vm.setComposeOptions('new', value)}
+            disabled={props.state.publishing.has('new')}
+            images={props.state.draftImages.new}
+            uploads={props.state.mediaUploads}
+            imageUploadEnabled={props.state.imageUploadEnabled}
+            privateImageUploadEnabled={props.state.privateImageUploadEnabled}
+            onAddImage={(image) => props.vm.addDraftImage('new', image)}
+            onRemoveImage={(id) => props.vm.removeDraftImage('new', id)}
+            onImageAlt={(id, alt) => props.vm.setImageAlt('new', id, alt)}
+            onResolveImage={(id) => props.vm.resolveImage('new', id)}
             onDraft={(value) => props.vm.setDraft('new', value)}
             error={props.state.composeError?.key === 'new' ? props.state.composeError : undefined}
             onSubmit={props.vm.publish}
@@ -191,6 +217,24 @@ export default function FeedList(props: {
                 <Icon name="sparkle" class="empty-state-icon" />
                 <h2>{empty().heading}</h2>
                 <p>{empty().body}</p>
+                <Show when={props.state.firstFollow}>
+                  <button
+                    class="secondary-button"
+                    aria-haspopup="dialog"
+                    onClick={props.vm.openPeople}
+                  >
+                    {discoveryCopy.firstAction}
+                  </button>
+                </Show>
+                <Show when={props.state.emptyBecauseHidden}>
+                  <button
+                    class="secondary-button"
+                    aria-haspopup="dialog"
+                    onClick={props.vm.openModeration}
+                  >
+                    {readingCopy.manageEmpty}
+                  </button>
+                </Show>
                 <Show when={props.state.query}>
                   <button class="secondary-button" onClick={() => props.vm.setQuery('')}>
                     {copy.clearSearch}

@@ -10,6 +10,8 @@ export const createSession = () =>
 import {
   readPreference,
   writePreference,
+  readMuted,
+  writeMuted,
   readSaved,
   writeSaved,
   readDensity,
@@ -21,6 +23,8 @@ import type { Preferences } from './presentation/ports';
 export const browserPreferences: Preferences = {
   read: readPreference,
   write: writePreference,
+  readMuted,
+  writeMuted,
   readSaved,
   writeSaved,
   readDensity,
@@ -41,3 +45,6 @@ export const browserSessionStore: SessionStore = {
   write: writeSessionRecord,
   clear: clearSessionRecord,
 };
+
+import { createAccountDiscoveryGateway } from './infrastructure/account-discovery';
+export const browserAccountDiscovery = createAccountDiscoveryGateway();

@@ -21,6 +21,19 @@ export const visibilityCopy: Record<Visibility, VisibilityCopy> = {
     description: '공개 글이 아니에요. 정확한 범위는 서버만 알아요',
   },
 };
+/** Reply composition discloses the explicit participants as well as the selected scope. */
+export const replyAudienceCopy = {
+  heading: '답글 수신자',
+  empty: '나를 제외한 답글 수신자가 없어요',
+  unavailable: '답글 수신자를 확인할 수 없어요',
+  followersWithoutParticipants: '나를 팔로우하는 사람에게 보내요',
+  descriptions: {
+    public: visibilityCopy.public.description,
+    unlisted: visibilityCopy.unlisted.description,
+    followers: '내 팔로워와 표시된 답글 수신자에게 보내요',
+    direct: '표시된 답글 수신자에게만 보내요',
+  },
+};
 /** Full accessible text for the indicator on a note: "팔로워만 공개". */
 export const visibilityIndicator: Record<Visibility, string> = {
   public: '공개',

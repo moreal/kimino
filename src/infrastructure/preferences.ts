@@ -44,3 +44,16 @@ export function readRevealWarned(): boolean {
 export function writeRevealWarned(on: boolean): boolean {
   return writePreference(REVEAL_WARNED_KEY, on ? '1' : '');
 }
+
+/** Account-scoped author IRIs, never note content or credentials. */
+export function readMuted(actor: string): string[] {
+  try {
+    const value: unknown = JSON.parse(readPreference(`muted.${actor}`));
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+export function writeMuted(actor: string, ids: string[]): boolean {
+  return writePreference(`muted.${actor}`, JSON.stringify(ids));
+}

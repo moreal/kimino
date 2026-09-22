@@ -1,3 +1,7 @@
+import type { AccountDiscoveryState } from '../application/account-discovery';
+import type { RelationshipState } from '../application/relationship-types';
+import type { ImageDraft } from '../domain/images';
+import type { ImageUploadState } from '../application/image-types';
 import type {
   Actor,
   ComposeVisibility,
@@ -6,6 +10,7 @@ import type {
   TimelineNote,
 } from '../domain/social';
 import type { SocialSessionSnapshot } from '../application/social-session';
+import { mutedAuthorIds, readingNotes } from './reading-controls';
 import { actorLabelOf } from './actor-name';
 import { copy, feedFoot, pageTitle, viewTitles } from './copy';
 import { actorProfile, type ActorProfile } from './note-display';
@@ -42,6 +47,22 @@ export interface Conversation {
 }
 
 export interface FeedState {
+  readonly publishing: ReadonlySet<string>;
+  readonly draftImages: Record<string, readonly ImageDraft[]>;
+  readonly mediaUploads: Readonly<Record<string, ImageUploadState>>;
+  readonly imageUploadEnabled: boolean;
+  readonly privateImageUploadEnabled: boolean;
+  readonly imageReadEnabled: boolean;
+  readonly mutedAuthors: readonly ActorProfile[];
+  readonly hiddenNoteIds: ReadonlySet<string>;
+  /** This exact list/search would contain loaded notes if no authors were hidden. */
+  readonly emptyBecauseHidden: boolean;
+  readonly moderationOpen: boolean;
+  readonly peopleOpen: boolean;
+  readonly firstFollow: boolean;
+  readonly discovery?: AccountDiscoveryState;
+  readonly relationships?: RelationshipState;
+  readonly peopleProfiles: readonly ActorProfile[];
   readonly actor?: Actor;
   readonly timeline?: Timeline;
   readonly demo: boolean;
@@ -52,6 +73,7 @@ export interface FeedState {
    * composer's own submitting state) - writes queue up behind one another in the session.
    */
   readonly connecting: boolean;
+  readonly readBudget?: { pages: number; items: number };
   /**
    * The timeline is being read again after a write or on request. Nothing is disabled by
    * it; the header may show a quiet indicator. The list stays usable and a new write may
@@ -211,6 +233,12 @@ export interface ComposeOptions {
 
 /** View-local state the feed keeps beside the session snapshot. */
 export interface FeedLocalState {
+  publishing: string[];
+  draftImages: Record<string, readonly ImageDraft[]>;
+  muted: string[];
+  moderationOpen: boolean;
+  peopleOpen: boolean;
+  discovery?: AccountDiscoveryState;
   view: FeedView;
   query: string;
   saved: string[];
@@ -260,6 +288,11 @@ export interface FeedLocalState {
   pages: number;
 }
 export const initialLocalState = (): FeedLocalState => ({
+  publishing: [],
+  draftImages: {},
+  muted: [],
+  moderationOpen: false,
+  peopleOpen: false,
   view: 'all',
   query: '',
   noticeId: 0,
@@ -400,8 +433,10 @@ export function feedFootLine(
 export function deriveFeedState(remote: SocialSessionSnapshot, local: FeedLocalState): FeedState {
   const actor = remote.actor?.id || '';
   const gone = new Set([...local.gone, ...(remote.timeline?.deleted ?? [])]);
+  const loaded = remote.timeline?.notes || [];
+  const reading = readingNotes(loaded, local.muted, actor);
   const all = withConfirmedReactions(
-    (remote.timeline?.notes || []).filter((note) => !gone.has(note.id)),
+    reading.notes.filter((note) => !gone.has(note.id)),
     actor || undefined,
     local.confirmed,
   );
@@ -434,13 +469,52 @@ export function deriveFeedState(remote: SocialSessionSnapshot, local: FeedLocalS
     local.authorFilter,
     remote.actor,
   );
+  const emptyBecauseHidden =
+    notes.length === 0 &&
+    reading.hiddenNoteIds.size > 0 &&
+    scopeNotes(
+      loaded.filter((note) => !gone.has(note.id)),
+      local.view,
+      actor,
+      local.query,
+      local.saved,
+      local.authorFilter,
+      remote.actor,
+    ).notes.length > 0;
   const onScreen = pageNotes(notes, local.pages);
   return {
+    publishing: new Set(local.publishing),
+    draftImages: local.draftImages,
+    mediaUploads: remote.mediaUploads ?? {},
+    imageUploadEnabled: remote.demo || !!remote.imageUploadEnabled,
+    privateImageUploadEnabled: !!remote.privateImageUploadEnabled,
+    imageReadEnabled: !!remote.imageReadEnabled,
+    mutedAuthors: mutedAuthorIds(local.muted, actor).map((id) =>
+      actorProfile(loaded, id, remote.actor),
+    ),
+    hiddenNoteIds: reading.hiddenNoteIds,
+    emptyBecauseHidden,
+    moderationOpen: local.moderationOpen,
+    peopleOpen: local.peopleOpen,
+    firstFollow:
+      !!remote.actor &&
+      !remote.demo &&
+      !remote.connecting &&
+      local.view === 'all' &&
+      !local.query &&
+      !local.authorFilter &&
+      loaded.filter((note) => !gone.has(note.id)).length === 0,
+    discovery: local.discovery,
+    relationships: remote.relationships,
+    peopleProfiles: [...new Set(loaded.map((note) => note.author))].map((id) =>
+      actorProfile(loaded, id, remote.actor),
+    ),
     actor: remote.actor,
     timeline: remote.timeline,
     demo: remote.demo,
     loadedAt: remote.loadedAt,
     connecting: remote.connecting,
+    readBudget: remote.readBudget,
     refreshing: remote.refreshing,
     loading: remote.connecting && !remote.timeline,
     error: page.text,
@@ -464,7 +538,7 @@ export function deriveFeedState(remote: SocialSessionSnapshot, local: FeedLocalS
     view: local.view,
     query: local.query,
     saved: local.saved,
-    reply: local.reply,
+    reply: local.reply && !reading.hiddenNoteIds.has(local.reply.id) ? local.reply : undefined,
     confirmDelete: local.confirmDelete,
     editing: local.editing ? byId.get(local.editing) : undefined,
     focusedNoteId: local.focusedNoteId,
@@ -481,7 +555,7 @@ export function deriveFeedState(remote: SocialSessionSnapshot, local: FeedLocalS
     remaining: onScreen.remaining,
     lastPage: onScreen.lastPage,
     conversation,
-    missingSaved: local.saved.filter((id) => !byId.has(id)),
+    missingSaved: local.saved.filter((id) => !byId.has(id) && !reading.hiddenNoteIds.has(id)),
     title: pageTitle(local.view, !!local.focusedNoteId),
   };
 }

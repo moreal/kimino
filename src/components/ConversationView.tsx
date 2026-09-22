@@ -3,6 +3,7 @@ import type { TimelineNote } from '../domain/social';
 import type { FeedState, FeedViewModel } from '../presentation/feed-view-model';
 import { threadCue, visualDepth, type ConversationNode } from '../presentation/feed-selectors';
 import { copy } from '../presentation/copy';
+import { readingCopy } from '../presentation/copy-reading';
 import { shortcutFor } from '../presentation/keyboard';
 import { safeHttpUrl } from '../presentation/links';
 import { isMentionOnly } from '../presentation/feed';
@@ -116,6 +117,7 @@ export default function ConversationView(props: {
     const id = missingParent();
     return !!id && props.state.gone.has(id);
   };
+  const missingParentHidden = () => props.state.hiddenNoteIds.has(missingParent() ?? '');
   const missingParentLink = () => safeHttpUrl(missingParent());
   /**
    * Opened from 받은 답글 on a note that only mentions me: say why my note is not above it,
@@ -145,8 +147,12 @@ export default function ConversationView(props: {
       </div>
       <Show when={missingParent()}>
         <Show
-          when={!missingParentGone()}
-          fallback={<div class="missing-parent">{copy.parentDeleted}</div>}
+          when={!missingParentGone() && !missingParentHidden()}
+          fallback={
+            <div class="missing-parent">
+              {missingParentHidden() ? readingCopy.hiddenParent : copy.parentDeleted}
+            </div>
+          }
         >
           <div class="missing-parent">
             {copy.missingParent}{' '}

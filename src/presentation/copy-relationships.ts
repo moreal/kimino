@@ -1,0 +1,87 @@
+export const relationshipCopy = {
+  heading: '사람 관리',
+  manage: '내 목록',
+  manageScope: '팔로우 중인 사람과 보낸 요청을 확인해요.',
+  findPeople: '사람 찾기',
+  views: '사람 관리 보기',
+  filters: '팔로우 상태로 보기',
+  filterLabels: {
+    all: '전체',
+    following: '팔로우 중',
+    requested: '승인 대기',
+    attention: '확인 필요',
+  },
+  search: '목록에서 찾기',
+  searchPlaceholder: '이름, 아이디 또는 계정 주소',
+  searchScope: '불러온 목록에서만 찾아요. 다른 서버를 조회하지 않아요.',
+  noMatches: '조건에 맞는 계정이 없어요.',
+  clearFilters: '검색과 필터 지우기',
+  knownCounts: '불러온 기록 기준',
+  open: '사람 관리',
+  close: '사람 관리 닫기',
+  scope:
+    '팔로우할 사람을 찾고 요청과 승인 상태를 확인해요. 승인 후 서버에서 전달한 새 글이 타임라인에 나타나며, 과거 글은 없을 수 있어요.',
+  demo: '미리보기에서는 팔로우를 전송하지 않아요. C2S 계정을 연결하면 사용할 수 있어요.',
+  inspect: '입력 주소 보기',
+  invalid:
+    '내 계정이 아닌 정확한 HTTPS Actor URL을 입력해 주세요. 로컬 서버는 HTTP도 사용할 수 있어요.',
+  reviewed:
+    '주소 형식만 확인했어요. 계정의 이름·소개나 실제 존재 여부를 조회한 결과는 아니에요. 요청할 주소가 맞는지 확인해주세요.',
+  refresh: '상태 새로고침',
+  timeline: '타임라인에서 새 글 확인',
+  loading: '팔로우 상태를 확인하는 중…',
+  readTarget: '취소할 계정:',
+  readFollowTarget: '팔로우할 계정:',
+  readFollowHelp: '팔로우 요청은 아직 보내지 않았어요. 내 계정의 전송 정보를 확인하고 있어요.',
+  preparationFailed: (action: 'follow' | 'unfollow', detail: string) =>
+    `${action === 'follow' ? '팔로우' : '팔로우 취소'} 요청은 보내지 않았어요. ${detail}`,
+  readMoreHeading: '팔로우 기록을 이어서 읽을까요?',
+  readCollections: { following: '팔로우 목록', inbox: '받은 활동', outbox: '보낸 활동' },
+  readMoreProgress: (collection: string, pages: number, items: number) =>
+    `${collection} ${pages}페이지에서 항목 ${items}개를 읽었어요.`,
+  readMoreHelp: '끝까지 읽은 뒤 팔로우 상태를 갱신해요.',
+  readUnfollowHelp:
+    '팔로우 취소 요청은 아직 보내지 않았어요. 마지막 기록까지 확인해야 전송할 수 있어요.',
+  continueReading: '기록 이어 읽기',
+  cancelReading: '읽기 중단',
+  readCanceled:
+    '읽기를 중단했어요. 이전 목록은 유지되지만, 요청을 보내기 전에 상태를 다시 확인해 주세요.',
+  notLoaded: '팔로우 상태를 먼저 새로고침해 주세요.',
+  readFailed:
+    '상태를 새로 읽지 못했어요. 아래 이전 기록만으로 팔로우하지 않는다고 판단할 수 없어요.',
+  unsupported: '이 연결에서는 팔로우 상태를 확인할 수 없어 요청을 보낼 수 없어요.',
+  empty: '현재 확인된 팔로우나 요청이 없어요.',
+  noEvidence: '아직 팔로우 목록을 확인하지 못했어요.',
+  list: '팔로우와 요청 목록',
+  follow: '팔로우',
+  unfollow: '팔로우 취소',
+  withdraw: '요청 취소',
+  operationFailed:
+    '요청을 완료하지 못했어요. 아래 상태를 확인해 주세요. 자동으로 다시 보내지는 않아요.',
+  busy: '진행 중인 요청이 끝난 뒤 다시 확인해 주세요.',
+  self: '내 계정은 팔로우할 수 없어요.',
+  missingReceipt: '취소할 원래 팔로우 요청 주소를 확인하지 못했어요. 상태를 새로고침해 주세요.',
+  ambiguousReceipt:
+    '같은 상대에게 보낸 요청이 여러 개라 취소할 대상을 하나로 정할 수 없어요. 서버에서 확인해 주세요.',
+  refreshReceipt:
+    '서버가 요청을 접수했어요. 상태 새로고침으로 결과를 확인해 주세요. 요청을 다시 보내지는 않아요.',
+  uncertainHelp:
+    '서버에 요청이 도착했는지 알 수 없어요. 중복 요청을 막기 위해 다시 보내지 않아요. 상태 새로고침 또는 서버에서 확인해 주세요.',
+  requestedHelp: '내 팔로우 요청이 확인됐어요. 상대의 승인이나 서버의 처리를 기다리고 있어요.',
+  rejectedHelp: '상대가 요청을 거절했어요. 다시 요청하려면 팔로우를 눌러 주세요.',
+  labels: {
+    unknown: '상태 확인 전',
+    'not-following': '팔로우하지 않음',
+    following: '팔로우 중',
+    requested: '승인 대기',
+    rejected: '요청 거절됨',
+    'pending-follow': '팔로우 전송 중…',
+    'pending-unfollow': '취소 전송 중…',
+    'preparing-follow': '팔로우 준비 중…',
+    'preparing-unfollow': '취소할 기록 확인 중…',
+    'confirmed-follow': '팔로우 요청 접수됨 · 상태 반영 대기',
+    'confirmed-unfollow': '취소 요청 접수됨 · 상태 반영 대기',
+    'uncertain-follow': '팔로우 전송 결과 불명',
+    'uncertain-unfollow': '취소 전송 결과 불명',
+  },
+};

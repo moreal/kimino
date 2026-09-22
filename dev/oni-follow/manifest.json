@@ -1,0 +1,146 @@
+{
+  "label": "Kimino experimental ONI C2S follow fixture; not stock ONI",
+  "oni": {
+    "commit": "58be49b478fc1e0eb1011732a46c010cb520ea81",
+    "archive_url": "https://codeload.github.com/mariusor/oni/tar.gz/58be49b",
+    "archive_sha256": "6f22ad47fc85911a5a2a32fb26dadc84c426d479194ae7a1bd330f16ea9c3421",
+    "archive_basename": "oni-58be49b.tar.gz",
+    "patch_sha256": "a69f0ef992da9dc35cf96268b56d4cf361c48b292980550ef1aa97625d86b7fb"
+  },
+  "processing": {
+    "module": "github.com/go-ap/processing",
+    "version": "v0.0.0-20260905151925-d6997bfd0e03",
+    "revision": "d6997bfd0e03",
+    "archive_url": "https://proxy.golang.org/github.com/go-ap/processing/@v/v0.0.0-20260905151925-d6997bfd0e03.zip",
+    "archive_sha256": "6b3b2ef678fe45e518299a75777e36a5145805920a51feaee4d6cce9fd532b35",
+    "module_h1": "h1:n//vGUBNUqNLM/nDp6xyB2y/K8VuiXT+Zy/HyHCNH9M=",
+    "archive_basename": "processing-d6997bfd0e03.zip",
+    "patch_sha256": "45b130217d65e131570297c5099733adb08ef1dab5b64318c1e22e8249668a77"
+  },
+  "files": {
+    "oni": {
+      "handlers.go": {
+        "original_sha256": "763c73f701fedb427c54488c591b451ca3611b64d6819a82196a8d040e65c4c0",
+        "patched_sha256": "3c5aebfa5c081dd08133e0258d17c09cc1482ff6d2620eb219df52723d20d47f"
+      },
+      "probe_received_in.go": {
+        "original_sha256": null,
+        "patched_sha256": "86a5e039d3f611d1297018fadf9dd3d4e27856ab75462ddc6dd657be202bb61d"
+      },
+      "probe_received_in_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "6cb671b726ebbcc0313d7b416d8e8718b1f4850165134b72a380f30c80cd7dec"
+      },
+      "probe_collection_owner.go": {
+        "original_sha256": null,
+        "patched_sha256": "16260e82cf748b3759ebe96cb1a0a205ab84be6772757f97142ea3085a1eb280"
+      },
+      "probe_collection_owner_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "90a729446e2334f4f5e197e1432a0a01f7d9f8d86b668e30cbf04a945dee9984"
+      },
+      "probe_response_cache_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "91d5bc04efd6458ae96e5fae38593a66a5b5be8c41525735695657903e67e6a4"
+      },
+      "probe_proxy_private_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "164cc19efe83406737fb4fdab6d7f092cf5de387fdd97afb5b40c64c51f5d6fd"
+      },
+      "probe_proxy_raster_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "17f604e1ef68607c98bdd05e10e281334c1572c77a81e2d917b9988f78f27454"
+      },
+      "control.go": {
+        "original_sha256": "b9e1ab1dd12269d5eb7df71eaa112eff5f010f3d8284f3e12018ef4b39d6565e",
+        "patched_sha256": "be5a4f35a246da342756421d676080af85e61c0825d18be5d0887d14691ca89e"
+      },
+      "probe_follower_resource.go": {
+        "original_sha256": null,
+        "patched_sha256": "02464f1c29e398520271d719139307713dd0f59bba0c8816b4b130eb219275ee"
+      },
+      "probe_follower_resource_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "3441e97e36a75a122dc266103431f79792e465e64551ada0e6ada261ddfc0b7b"
+      },
+      "probe_proxy_transport.go": {
+        "original_sha256": null,
+        "patched_sha256": "bee3df75f2f1182d4935244127d30d66b67a74e46aa73f26fce817ea31caef2f"
+      },
+      "probe_proxy_transport_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "a71431734250aa5fcfd77373221cc9c8247670ee7ba1cce1782ad7a1d89958d5"
+      },
+      "probe_private_media_capability.go": {
+        "original_sha256": null,
+        "patched_sha256": "17c58f1b50135ad1ea9f680bc55c9a1b13a6e303451adbc1b8283239ba1161b1"
+      },
+      "probe_private_media_capability_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "092ffd5764ae055d41b8fbaa1dd08b8ec402212eed365ac71fc954efe6e8f43d"
+      }
+    },
+    "processing": {
+      "client_to_server.go": {
+        "original_sha256": "ca2f34ec36ef65a7b9469ac9483cf5a1b4ab6562913c7ba449938eb622e59477",
+        "patched_sha256": "fde5881aaab2a0c0184f9a932d7a9e76bf8ca7a1d0a42d5c85d5c00a1e775474"
+      },
+      "server_to_server.go": {
+        "original_sha256": "889d85cf8ebe08e16a83fab26b1b9aa7cbf1750bdd8b4c18ef439dd1b0320bcf",
+        "patched_sha256": "cad7683b1bef21747ade2e1d635dc287cab79279a5c438d9b68c33eef4ed6a37"
+      },
+      "negating.go": {
+        "original_sha256": "579b3aa4ad0f0cc90d706ee0451702175ad7f01bc452768754d88ad8ca1684e5",
+        "patched_sha256": "0633799d843fa1882086fa079157033837958935078174dac9a126ff115a94f2"
+      },
+      "kimino_probe_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "f263bf33ae6665f047e40a666eb9fd7663cc415a2ff160d4c4e45b0259e93b08"
+      },
+      "kimino_withdrawal_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "3b1d186f602384cabf3b9419800ae1aacdf37ebd9a8a4ea92fcc56b0bcb39186"
+      },
+      "probe_delivery_audit.go": {
+        "original_sha256": null,
+        "patched_sha256": "57cc6b3f26c2841ce528f1b26859aa5cf33ff93c50792d7dfc092f3b20e8dbc1"
+      },
+      "probe_delivery_audit_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "2829772e4084d7c68a36969b9526f3408fb3e0fc718cf543cf6b01fa9a88dbce"
+      }
+    },
+    "filters": {
+      "cursor.go": {
+        "original_sha256": "81b015b79f3cd37a6968ad6ac8005a6c5b0265955af196accf11eb0ec6733d00",
+        "patched_sha256": "694a8acab042d6f83467b55d0462473ca99dfe87d2e3010175533b2cc4d72938"
+      },
+      "cursor_boundary_test.go": {
+        "original_sha256": null,
+        "patched_sha256": "93a10e1f9c6e975cc40daec215c07315329185d4afaa87bcd314043f8527cdcf"
+      },
+      "index/extract_test.go": {
+        "original_sha256": "6f2190f4024d36f2eb702b784632a0747bd926a9cb66fe0025c317b2b97ca180",
+        "patched_sha256": "fe8640f374dc1526b6b6d45fc7c7b42f028c359edb5f4dbfaf0b2e2ae23cf784"
+      }
+    }
+  },
+  "excluded": [
+    "ONI go.mod absolute local replace; use a relative replace during preparation",
+    "ONI generated go.sum and built static assets/binaries",
+    "processing client_to_server.go KIMINO_STAGE logging and fmt/os diagnostic imports",
+    "processing collections_dissemination.go diagnostic-only changes",
+    "temporary pure-reproduction programs; regression tests are included"
+  ],
+  "filters": {
+    "module": "github.com/go-ap/filters",
+    "version": "v0.0.0-20260831130242-f116eb702ce2",
+    "revision": "f116eb702ce2",
+    "archive_url": "https://proxy.golang.org/github.com/go-ap/filters/@v/v0.0.0-20260831130242-f116eb702ce2.zip",
+    "archive_sha256": "df0a5507bf062ef7709879fa8e8e0cb19e8044fef0dbd8ec6ac9700193531d7d",
+    "module_h1": "h1:hYUFkuRbIiMv2Fp5L98xCBGZBuMxhvF29NiPpErVMy4=",
+    "archive_basename": "filters-f116eb702ce2.zip",
+    "patch_sha256": "7f92f8e6f9738041226bf1cc8dee7aaca51dcc6b76ffda9b45ec6bff880d0b50",
+    "commit": "f116eb702ce2ad6ba6237124576097f7f64515ef"
+  }
+}

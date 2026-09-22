@@ -1,0 +1,273 @@
+--- a/cursor.go
++++ b/cursor.go
+@@ -331,7 +331,6 @@
+ 	pp := url.Values{}
+ 	np := url.Values{}
+ 
+-	var lastPage vocab.ItemCollection
+ 	var result vocab.ItemCollection
+ 
+ 	if ff := FilterChecks(fns...); len(ff) > 0 {
+@@ -353,6 +352,8 @@
+ 	resetAfter(fns...)
+ 	resetBefore(fns...)
+ 
++	// Snapshot before a before cursor reverses the working slice in place.
++	lastEligible := col[len(col)-1].GetLink()
+ 	result = col
+ 	after := AfterChecks(fns...)
+ 	if len(after) > 0 {
+@@ -373,7 +374,7 @@
+ 	if len(before) > 0 {
+ 		slices.Reverse(result)
+ 	}
+-	onLastPage := len(after) > 0 && len(col) < maxItems
++	onLastPage := result[len(result)-1].GetLink().Equal(lastEligible)
+ 	onFirstPage := len(after) == 0 && col.First().GetLink().Equal(result.First().GetLink())
+ 
+ 	var firstPage vocab.ItemCollection
+@@ -396,13 +397,8 @@
+ 	} else {
+ 		pp = nil
+ 	}
+-	if len(result) >= 1 && len(col) > maxItems+1 {
++	if len(result) >= 1 && len(col) > maxItems {
+ 		last := result[len(result)-1]
+-		for _, bottom := range lastPage {
+-			if onLastPage = last.GetLink().Equal(bottom.GetLink()); onLastPage {
+-				break
+-			}
+-		}
+ 		if !onLastPage {
+ 			np.Add(keyAfter, last.GetLink().String())
+ 		} else {
+--- /dev/null
++++ b/cursor_boundary_test.go
+@@ -0,0 +1,193 @@
++package filters
++
++import (
++	"encoding/json"
++	"fmt"
++	vocab "github.com/go-ap/activitypub"
++	"net/url"
++	"slices"
++	"testing"
++	"time"
++)
++
++func boundaryItems(n int) vocab.ItemCollection {
++	items := make(vocab.ItemCollection, n)
++	for i := range items {
++		items[i] = &vocab.Object{ID: vocab.ID(fmt.Sprintf("https://example.test/items/%d", i)), Type: vocab.NoteType, Published: time.Unix(int64(n-i), 0)}
++	}
++	return items
++}
++
++func boundaryPage(t *testing.T, items vocab.ItemCollection, iri vocab.IRI, pageInput bool, extra ...Check) *vocab.OrderedCollectionPage {
++	t.Helper()
++	checks, err := FromIRI(iri)
++	if err != nil {
++		t.Fatal(err)
++	}
++	checks = append(checks, extra...)
++	var input vocab.Item = &vocab.OrderedCollection{ID: iri, Type: vocab.OrderedCollectionType, TotalItems: uint(len(items)), OrderedItems: append(vocab.ItemCollection{}, items...)}
++	if pageInput {
++		input = &vocab.OrderedCollectionPage{ID: iri, Type: vocab.OrderedCollectionPageType, TotalItems: uint(len(items)), OrderedItems: append(vocab.ItemCollection{}, items...)}
++	}
++	got := PaginateCollection(input, checks...)
++	page, ok := got.(*vocab.OrderedCollectionPage)
++	if !ok {
++		t.Fatalf("unexpected page type %T", got)
++	}
++	return page
++}
++
++func TestPaginationBoundaryCompleteWalk(t *testing.T) {
++	for _, n := range []int{0, 1, 19, 20, 21, 22, 40, 41} {
++		for _, pageInput := range []bool{false, true} {
++			t.Run(fmt.Sprintf("count_%d/page_%t", n, pageInput), func(t *testing.T) {
++				items := boundaryItems(n)
++				iri := vocab.IRI("https://example.test/inbox?maxItems=20")
++				seenPages := map[vocab.IRI]bool{}
++				seen := map[vocab.IRI]bool{}
++				count := 0
++				for step := 0; ; step++ {
++					if step > 4 || seenPages[iri] {
++						t.Fatal("pagination did not terminate without a cycle")
++					}
++					seenPages[iri] = true
++					p := boundaryPage(t, items, iri, pageInput)
++					if p.TotalItems != uint(n) || len(p.OrderedItems) > 20 {
++						t.Fatal("page size or total changed")
++					}
++					data, err := vocab.MarshalJSON(p)
++					if err != nil {
++						t.Fatal(err)
++					}
++					var shape map[string]json.RawMessage
++					if err := json.Unmarshal(data, &shape); err != nil {
++						t.Fatal(err)
++					}
++					if n > 0 && len(shape["orderedItems"]) == 0 {
++						t.Fatal("nonempty collection advertised a page without serialized contents")
++					}
++					for _, item := range p.OrderedItems {
++						id := item.GetLink()
++						if seen[id] {
++							t.Fatal("duplicate item")
++						}
++						if !id.Equal(items[count].GetLink()) {
++							t.Fatal("item order changed")
++						}
++						seen[id] = true
++						count++
++					}
++					if count == n && (!vocab.IsNil(p.Next) && p.Next.GetLink() != vocab.EmptyIRI) {
++						t.Fatal("last data page must not advertise an empty terminal page")
++					}
++					if vocab.IsNil(p.Next) || p.Next.GetLink() == vocab.EmptyIRI {
++						break
++					}
++					iri = p.Next.GetLink()
++				}
++				if count != n {
++					t.Fatalf("complete advertised walk returned %d of %d items", count, n)
++				}
++			})
++		}
++	}
++}
++
++func TestPaginationBoundaryFiltered(t *testing.T) {
++	for _, eligible := range []int{19, 20, 21} {
++		t.Run(fmt.Sprint(eligible), func(t *testing.T) {
++			items := boundaryItems(22)
++			for i := eligible; i < len(items); i++ {
++				items[i].(*vocab.Object).Type = vocab.ArticleType
++			}
++			shuffled := append(vocab.ItemCollection{}, items...)
++			slices.Reverse(shuffled)
++			p := boundaryPage(t, shuffled, "https://example.test/inbox?maxItems=20", false, HasType(vocab.NoteType))
++			want := eligible
++			if want > 20 {
++				want = 20
++			}
++			if len(p.OrderedItems) != want {
++				t.Fatal("filtered size mismatch")
++			}
++			hasNext := !vocab.IsNil(p.Next) && p.Next.GetLink() != vocab.EmptyIRI
++			if hasNext != (eligible > 20) {
++				t.Fatalf("eligible=%d next=%t", eligible, hasNext)
++			}
++			if hasNext {
++				last := boundaryPage(t, shuffled, p.Next.GetLink(), false, HasType(vocab.NoteType))
++				if len(last.OrderedItems) != 1 || !last.OrderedItems[0].GetLink().Equal(items[20].GetLink()) {
++					t.Fatal("filtered remainder unavailable")
++				}
++				if !vocab.IsNil(last.Next) && last.Next.GetLink() != vocab.EmptyIRI {
++					t.Fatal("filtered last data page has next")
++				}
++			}
++		})
++	}
++}
++
++func TestPaginationBoundaryBeforeAfter(t *testing.T) {
++	items := boundaryItems(21)
++	for _, tc := range []struct {
++		key                  string
++		cursor, first, count int
++	}{{"after", 19, 20, 1}, {"before", 20, 0, 20}} {
++		q := url.Values{"maxItems": {"20"}, tc.key: {items[tc.cursor].GetLink().String()}}
++		p := boundaryPage(t, items, vocab.IRI("https://example.test/inbox?"+q.Encode()), false)
++		if len(p.OrderedItems) != tc.count {
++			t.Fatalf("%s count=%d", tc.key, len(p.OrderedItems))
++		}
++		for i, it := range p.OrderedItems {
++			if !it.GetLink().Equal(items[tc.first+i].GetLink()) {
++				t.Fatalf("%s order mismatch", tc.key)
++			}
++		}
++	}
++}
++
++// A before cursor reverses the working slice. Its next link must still move
++// forward in the original eligible order, including the final item.
++func TestPaginationBoundaryBeforeNext(t *testing.T) {
++	items := boundaryItems(41)
++	q := url.Values{"maxItems": {"20"}, "before": {items[40].GetLink().String()}}
++	p := boundaryPage(t, items, vocab.IRI("https://example.test/inbox?"+q.Encode()), false)
++	if len(p.OrderedItems) != 20 || !p.OrderedItems[0].GetLink().Equal(items[20].GetLink()) {
++		t.Fatal("before page changed")
++	}
++	if vocab.IsNil(p.Next) {
++		t.Fatal("before page lost forward cursor")
++	}
++	last := boundaryPage(t, items, p.Next.GetLink(), false)
++	if len(last.OrderedItems) != 1 || !last.OrderedItems[0].GetLink().Equal(items[40].GetLink()) {
++		t.Fatal("before next did not reach final eligible item")
++	}
++	if !vocab.IsNil(last.Next) && last.Next.GetLink() != vocab.EmptyIRI {
++		t.Fatal("last data page has next")
++	}
++}
++
++func TestPaginationBoundaryNoContentlessTerminal(t *testing.T) {
++	items := boundaryItems(21)
++	first := boundaryPage(t, items, "https://example.test/inbox?maxItems=20", false)
++	if vocab.IsNil(first.Next) {
++		t.Fatal("missing second page")
++	}
++	last := boundaryPage(t, items, first.Next.GetLink(), false)
++	if vocab.IsNil(last.Next) || last.Next.GetLink() == vocab.EmptyIRI {
++		return
++	}
++	terminal := boundaryPage(t, items, last.Next.GetLink(), false)
++	data, err := vocab.MarshalJSON(terminal)
++	if err != nil {
++		t.Fatal(err)
++	}
++	var shape map[string]json.RawMessage
++	if err := json.Unmarshal(data, &shape); err != nil {
++		t.Fatal(err)
++	}
++	if len(shape["orderedItems"]) == 0 && terminal.TotalItems > 0 {
++		t.Fatal("advertised terminal serializes positive total without orderedItems")
++	}
++	t.Fatal("last data page advertises unnecessary terminal page")
++}
+--- a/index/extract_test.go
++++ b/index/extract_test.go
+@@ -8,6 +8,7 @@
+ 
+ 	vocab "github.com/go-ap/activitypub"
+ 	"github.com/google/go-cmp/cmp"
++	"github.com/google/go-cmp/cmp/cmpopts"
+ )
+ 
+ func Test_derefObject(t *testing.T) {
+@@ -89,12 +90,20 @@
+ 			),
+ 			want: []string{"test", "teste"},
+ 		},
+-	}
++		{
++			name: "duplicate values across languages",
++			args: nlv(kv(vocab.English, vocab.Content("test")), kv(vocab.French, vocab.Content("test"))),
++			want: []string{"test", "test"},
++		},
++	}
++	// NaturalLanguageValues is a map: extraction preserves values, not order.
++	// Sorting for comparison retains multiplicity, unlike converting to a set.
++	unorderedStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
+ 	for _, tt := range tests {
+ 		t.Run(tt.name, func(t *testing.T) {
+ 			got := ExtractNatLangVal(tt.args)
+-			if !cmp.Equal(got, tt.want, nlvComparer) {
+-				t.Errorf("ExtractNatLangVal() = %s", cmp.Diff(tt.want, got, nlvComparer))
++			if !cmp.Equal(got, tt.want, unorderedStrings) {
++				t.Errorf("ExtractNatLangVal() = %s", cmp.Diff(tt.want, got, unorderedStrings))
+ 			}
+ 		})
+ 	}

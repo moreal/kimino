@@ -1,9 +1,21 @@
 import type { NoteDraft, ReactionKind, Timeline, TimelineNote } from '../domain/social';
-import { clampVisibility } from '../domain/note-content';
+import { buildAddressing, clampVisibility } from '../domain/note-content';
 import { ownReaction } from '../domain/evaluate';
+import { createImagePublisher } from './image-publisher';
+import { validateImages } from '../domain/images';
+import type { ImageGateway, ImageUploadState } from './image-types';
+import type { ImageReadGateway, ReadImage } from './image-reader';
+import type { RelationshipGateway, RelationshipState } from './relationship-types';
+import { createRelationshipSession } from './relationship-session';
 import { createGuard } from './guard';
 import {
+  createTimelineReadController,
+  TimelineReadCancelled,
+  type TimelineReadOptions,
+} from './timeline-read';
+import {
   GatewayGone,
+  GatewayReadOnly,
   GatewayRejected,
   SessionError,
   toFailure,
@@ -26,8 +38,11 @@ export const DEMO_ACTOR = 'demo';
 
 /** Transport boundary: a fulfilled publish means the server accepted the write. */
 export interface TimelineGateway {
+  readonly relationships?: RelationshipGateway;
+  readonly images?: ImageGateway;
+  readonly imageReader?: ImageReadGateway;
   /** The full walk of both collections: what connecting and an explicit refresh do. */
-  loadTimeline(): Promise<Timeline>;
+  loadTimeline(options?: TimelineReadOptions): Promise<Timeline>;
   /**
    * The read after a confirmed write: the first page of each collection, merged over
    * `previous` so nothing it held is lost. The result carries `previous.reach` and
@@ -59,8 +74,14 @@ export interface TimelineGateway {
 export interface ConnectionCredentials {
   actorUrl: string;
   token?: string;
+  mediaMode?: 'oni';
 }
 export interface SocialSessionSnapshot extends ReadState {
+  readonly relationships?: RelationshipState;
+  readonly mediaUploads?: Readonly<Record<string, ImageUploadState>>;
+  readonly imageUploadEnabled?: boolean;
+  readonly privateImageUploadEnabled?: boolean;
+  readonly imageReadEnabled?: boolean;
   /** Read-only sample mode: writes are impossible, nothing is persisted. */
   readonly demo: boolean;
   /**
@@ -71,6 +92,12 @@ export interface SocialSessionSnapshot extends ReadState {
 }
 
 const emptySnapshot = (): SocialSessionSnapshot => ({
+  readBudget: undefined,
+  relationships: undefined,
+  mediaUploads: {},
+  imageUploadEnabled: false,
+  privateImageUploadEnabled: false,
+  imageReadEnabled: false,
   actor: undefined,
   timeline: undefined,
   demo: false,
@@ -120,12 +147,55 @@ export function createSocialSession(
   let cancellation: AbortController | undefined;
   const guard = createGuard();
   let connecting = false;
+  let images: ReturnType<typeof createImagePublisher> | undefined;
+
+  let relationships: ReturnType<typeof createRelationshipSession> | undefined;
+  let relationshipActor: string | undefined;
 
   function update(patch: Partial<SocialSessionSnapshot>) {
+    if (patch.actor && relationshipActor && patch.actor.id !== relationshipActor) {
+      relationships?.dispose();
+      relationships = undefined;
+      relationshipActor = undefined;
+      patch = { ...patch, relationships: undefined };
+    }
+    if (patch.actor) {
+      patch = {
+        ...patch,
+        privateImageUploadEnabled:
+          !!(patch.imageUploadEnabled ?? snapshot.imageUploadEnabled) &&
+          !(patch.demo ?? snapshot.demo) &&
+          patch.actor.privateMedia === true,
+      };
+    }
     snapshot = { ...snapshot, ...patch };
     for (const listener of listeners) listener(snapshot);
   }
-  const queue = createWriteQueue({ guard, state: () => snapshot, update, now });
+  const reads = createTimelineReadController((readBudget) => update({ readBudget }));
+  const queue = createWriteQueue({ guard, state: () => snapshot, update, now, reads });
+
+  function relationshipController() {
+    if (connecting) throw new SessionError({ kind: 'busy' });
+    if (!gateway || !snapshot.actor) throw new SessionError({ kind: 'not-connected' });
+    if (!relationships) {
+      const current = guard.current();
+      const actor = snapshot.actor.id;
+      relationshipActor = actor;
+      const controller = createRelationshipSession(
+        gateway.demo ? undefined : gateway.relationships,
+        actor,
+        {
+          current: () =>
+            guard.isCurrent(current) && snapshot.actor?.id === actor && relationshipActor === actor,
+          update: (state) => update({ relationships: state }),
+        },
+      );
+      relationships = controller;
+      update({ relationships: controller.getSnapshot() });
+      return controller;
+    }
+    return relationships;
+  }
 
   /** A write against the connected gateway; refused before it is queued when there is none. */
   async function write(
@@ -154,6 +224,10 @@ export function createSocialSession(
       cancellation?.abort();
       cancellation = new AbortController();
       gateway = undefined;
+      images = undefined;
+      relationships?.dispose();
+      relationships = undefined;
+      relationshipActor = undefined;
       queue.reset();
       update({ ...emptySnapshot(), connecting: true });
       try {
@@ -161,19 +235,52 @@ export function createSocialSession(
           actorUrl: credentials.actorUrl.trim(),
           token: credentials.token?.trim(),
           signal: cancellation.signal,
+          ...(credentials.mediaMode ? { mediaMode: credentials.mediaMode } : {}),
         });
-        const timeline = await next.loadTimeline();
+        const timeline = await reads.run(
+          (options) => next.loadTimeline(options),
+          () => guard.isCurrent(current),
+        );
         if (!guard.isCurrent(current)) return;
         gateway = next;
-        update({ ...landed(timeline, now()), demo: next.demo === true });
+        const enabled = credentials.mediaMode === 'oni' && !!next.images;
+        if (enabled)
+          images = createImagePublisher(
+            next.images!,
+            () => guard.isCurrent(current),
+            (mediaUploads) => update({ mediaUploads }),
+          );
+        update({
+          ...landed(timeline, now()),
+          demo: next.demo === true,
+          imageUploadEnabled: enabled || next.demo === true,
+          privateImageUploadEnabled: enabled && timeline.actor.privateMedia === true,
+          imageReadEnabled: credentials.mediaMode === 'oni' && !!next.imageReader && !next.demo,
+        });
       } catch (error) {
-        if (guard.isCurrent(current)) update({ error: toFailure(error) });
+        if (guard.isCurrent(current) && !(error instanceof TimelineReadCancelled))
+          update({ error: toFailure(error) });
       } finally {
         if (guard.isCurrent(current)) {
           connecting = false;
           update({ connecting: false });
         }
       }
+    },
+    /** Authorizes exactly the current pending chunk; repeated clicks do nothing. */
+    continueReading: () => reads.continueReading(),
+    /** Cancels only a full timeline read, never a POST or relationship operation. */
+    cancelReading: () => reads.cancel(),
+    async loadRelationships() {
+      await relationshipController().refresh();
+    },
+    continueRelationshipReading: () => relationships?.continueReading() ?? false,
+    cancelRelationshipReading: () => relationships?.cancelReading(),
+    async follow(target: string) {
+      await relationshipController().follow(target);
+    },
+    async unfollow(target: string) {
+      await relationshipController().unfollow(target);
     },
     /**
      * Asks the server again on request. Nothing is disabled while it runs, and a write may
@@ -196,16 +303,94 @@ export function createSocialSession(
     settled: () => queue.settled(),
     /** A reply is never addressed wider than its parent, whatever the caller asked for. */
     publish(draft: NoteDraft, replyTo?: TimelineNote) {
+      // Capture the submission before it waits in the write queue. A later edit to
+      // the draft or its parent cannot change recipients between Image and Note.
+      const parent = replyTo ? { ...replyTo, mentions: [...replyTo.mentions] } : undefined;
       const bounded: NoteDraft = {
         ...draft,
-        visibility: clampVisibility(draft.visibility, replyTo?.visibility),
+        ...(draft.images ? { images: draft.images.map((image) => ({ ...image })) } : {}),
+        ...(draft.attachments
+          ? {
+              attachments: draft.attachments.map((attachment) => ({
+                ...attachment,
+                audience: { to: [...attachment.audience.to], cc: [...attachment.audience.cc] },
+              })),
+            }
+          : {}),
+        visibility: clampVisibility(draft.visibility, parent?.visibility),
       };
       return write(
         async (active) => {
-          await active.publishNote(bounded, replyTo);
+          const current = guard.current();
+          const { images: selected, ...outgoing } = bounded;
+          if (selected?.length) {
+            const problem = validateImages(selected);
+            if (problem) throw new SessionError({ kind: 'media-invalid', reason: problem });
+            if (active.demo) throw new GatewayReadOnly('publish');
+            if (!images) throw new SessionError({ kind: 'media-unsupported' });
+            if (
+              bounded.visibility !== 'public' &&
+              bounded.visibility !== 'unlisted' &&
+              !snapshot.privateImageUploadEnabled
+            )
+              throw new SessionError({ kind: 'media-scope' });
+            if (!snapshot.actor) throw new SessionError({ kind: 'not-connected' });
+            const actor = { id: snapshot.actor.id, followers: snapshot.actor.followers };
+            const audience = buildAddressing(bounded.visibility, actor, parent);
+            outgoing.attachments = await images.prepare(selected, audience);
+            if (!guard.isCurrent(current)) throw new SessionError({ kind: 'not-connected' });
+          }
+          await active.publishNote(outgoing, parent);
+          if (guard.isCurrent(current))
+            for (const image of selected ?? []) images?.discard(image.id);
         },
         { notice: 'published', action: replyTo ? 'reply' : 'publish' },
       );
+    },
+    /** Only an explicit request for an attachment in the current timeline may load bytes. */
+    async loadImage(noteId: string, url: string, signal: AbortSignal): Promise<ReadImage> {
+      if (connecting || !gateway || !snapshot.actor)
+        throw new SessionError({ kind: 'not-connected' });
+      const reader = gateway.imageReader;
+      if (!snapshot.imageReadEnabled || !reader)
+        throw new SessionError({ kind: 'media-unsupported' });
+      const current = guard.current();
+      const target = () =>
+        snapshot.timeline?.notes
+          .find((note) => note.id === noteId)
+          ?.attachments.find((attachment) => attachment.kind === 'image' && attachment.url === url);
+      const attachment = target();
+      if (!attachment) throw new SessionError({ kind: 'media-unsupported' });
+      const activeSignal = AbortSignal.any([
+        signal,
+        ...(cancellation ? [cancellation.signal] : []),
+      ]);
+      activeSignal.throwIfAborted();
+      const result = await reader.load(
+        { url: attachment.url, mediaType: attachment.mediaType },
+        activeSignal,
+      );
+      activeSignal.throwIfAborted();
+      if (!guard.isCurrent(current) || target()?.mediaType !== attachment.mediaType || !target())
+        throw new SessionError({ kind: 'not-connected' });
+      return result;
+    },
+    /** Drops local receipts only; uploaded server objects are never deleted here. */
+    discardImage(id: string) {
+      images?.discard(id);
+    },
+    async resolveImage(id: string) {
+      if (connecting) throw new SessionError({ kind: 'busy' });
+      if (!gateway) throw new SessionError({ kind: 'not-connected' });
+      if (!images) throw new SessionError({ kind: 'media-unsupported' });
+      const current = guard.current();
+      try {
+        await images.resolve(id);
+        if (guard.isCurrent(current)) update({ error: undefined });
+      } catch (error) {
+        if (guard.isCurrent(current)) update({ error: toFailure(error) });
+        throw error;
+      }
     },
     /**
      * Like/share (`active`) or withdraw this actor's own reaction (`!active`). Withdrawing
@@ -213,9 +398,10 @@ export function createSocialSession(
      * one the request is refused (`reaction-missing`) rather than aimed at a guessed IRI.
      */
     react(note: TimelineNote, kind: ReactionKind, active: boolean) {
+      if (connecting) return Promise.reject(new SessionError({ kind: 'busy' }));
+      if (!gateway) return Promise.reject(new SessionError({ kind: 'not-connected' }));
       const own = ownReaction(note, kind, snapshot.actor?.id);
-      if (!active && gateway && !own)
-        return Promise.reject(new SessionError({ kind: 'reaction-missing' }));
+      if (!active && !own) return Promise.reject(new SessionError({ kind: 'reaction-missing' }));
       return write(
         async (gateway) => {
           if (active) await gateway.react(kind, note);
@@ -272,8 +458,12 @@ export function createSocialSession(
       cancellation = undefined;
       guard.next();
       gateway = undefined;
+      images = undefined;
+      relationships?.dispose();
+      relationships = undefined;
+      relationshipActor = undefined;
       connecting = false;
-      queue.reset({ owed: true });
+      queue.reset();
       update(emptySnapshot());
     },
   };

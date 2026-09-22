@@ -1,3 +1,4 @@
+import type { ImageProblem } from '../domain/images';
 import { AddressingError } from '../domain/note-content';
 
 /**
@@ -57,6 +58,18 @@ export class GatewayReadOnly extends Error {
     this.name = 'GatewayReadOnly';
   }
 }
+/** Client work bounds, distinct from malformed server responses. */
+export type ReadLimitReason = 'pages' | 'objects';
+export class GatewayReadLimit extends Error {
+  constructor(
+    readonly reason: ReadLimitReason,
+    readonly limit: number,
+  ) {
+    super(`Client read limit exceeded (${reason}: ${limit}).`);
+    this.name = 'GatewayReadLimit';
+  }
+}
+
 export type ProtocolProblem =
   /** The server may have accepted a write but did not confirm it the ActivityPub way. */
   | 'unconfirmed-write'
@@ -89,6 +102,17 @@ export type WriteAction =
 
 /** Why a use case failed. Presentation maps each kind to user-facing text. */
 export type SessionFailure =
+  | { kind: 'read-limit'; reason: ReadLimitReason; limit: number }
+  | { kind: 'relationship-target' }
+  | { kind: 'relationship-state' }
+  | { kind: 'relationship-unsupported' }
+  | { kind: 'relationship-uncertain' }
+  | { kind: 'media-unsupported' }
+  | { kind: 'media-invalid'; reason: ImageProblem }
+  | { kind: 'media-scope' }
+  | { kind: 'media-audience' }
+  | { kind: 'media-unresolved' }
+  | { kind: 'media-uncertain' }
   | { kind: 'not-connected' }
   | { kind: 'busy' }
   /** The write went through; only the read after it failed. `action` says what was written. */
@@ -117,6 +141,9 @@ export type SessionFailure =
 
 /** Classifies anything a gateway can throw into a typed failure; never user-facing text. */
 export function toFailure(error: unknown): SessionFailure {
+  if (error instanceof SessionError) return error.failure;
+  if (error instanceof GatewayReadLimit)
+    return { kind: 'read-limit', reason: error.reason, limit: error.limit };
   if (error instanceof GatewayGone) return { kind: 'note-gone' };
   if (error instanceof GatewayHttpError)
     return { kind: 'http', status: error.status, detail: error.message };

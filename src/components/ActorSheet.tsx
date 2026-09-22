@@ -1,5 +1,8 @@
-import { createEffect, onCleanup, Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+import { relationshipCopy } from '../presentation/copy-relationships';
+import { createEffect, Show } from 'solid-js';
 import { copy } from '../presentation/copy';
+import { readingCopy } from '../presentation/copy-reading';
 import type { ActorProfile } from '../presentation/note-display';
 import Icon from './Icons';
 import { restoreFocus } from './shortcuts';
@@ -7,47 +10,54 @@ import { restoreFocus } from './shortcuts';
 /**
  * A small in-app sheet about one author, built only from what the loaded timeline says:
  * handle, server, how many of their notes are loaded, a link to the profile on its server,
- * and a client-side "only this person" filter. No follower counts, no follow/mute/block:
- * this client has none of those.
+ * and local include/hide reading controls. Hiding is not server-side blocking.
  */
 export default function ActorSheet(props: {
   profile?: ActorProfile;
+  relationship?: JSX.Element;
+  onPeople?: () => void;
   onClose: () => void;
   onFilter: (id: string) => void;
+  onHide?: (id: string) => void;
+  demo?: boolean;
   /** Given for the connected account only: the sheet is where it disconnects. */
   onDisconnect?: () => void;
   disconnectLabel?: string;
 }) {
+  let dialog: HTMLDialogElement | undefined;
   let closeButton: HTMLButtonElement | undefined;
   let opener: Element | null = null;
   createEffect(
     () => !!props.profile,
-    (open, wasOpen) => {
-      if (open) {
+    (open) => {
+      if (!dialog) return;
+      if (open && !dialog.open) {
         opener = document.activeElement;
-        queueMicrotask(() => closeButton?.focus());
-      } else if (wasOpen) restoreFocus(opener);
+        dialog.showModal();
+        closeButton?.focus();
+      } else if (!open && dialog.open) {
+        dialog.close();
+        restoreFocus(opener);
+      }
     },
   );
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (props.profile && event.key === 'Escape') {
-      event.preventDefault();
-      props.onClose();
-    }
-  };
-  window.addEventListener('keydown', onKeyDown);
-  onCleanup(() => window.removeEventListener('keydown', onKeyDown));
   return (
-    <Show when={props.profile}>
-      {(profile) => (
-        <div class="shortcuts-backdrop" onClick={props.onClose}>
-          <section
-            class="shortcuts-dialog actor-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="actor-sheet-heading"
-            onClick={(event) => event.stopPropagation()}
-          >
+    <dialog
+      class="shortcuts-dialog actor-sheet"
+      role="dialog"
+      aria-labelledby="actor-sheet-heading"
+      ref={(el) => (dialog = el)}
+      onCancel={(event) => {
+        event.preventDefault();
+        props.onClose();
+      }}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) props.onClose();
+      }}
+    >
+      <Show when={props.profile}>
+        {(profile) => (
+          <div class="actor-sheet-body">
             <header class="shortcuts-header">
               <div class="actor-sheet-title">
                 <span class="eyebrow">{copy.actor.heading}</span>
@@ -79,6 +89,12 @@ export default function ActorSheet(props: {
                 <dd class="actor-facts-scope">{copy.actor.filterScope}</dd>
               </div>
             </dl>
+            {props.relationship}
+            <Show when={props.onPeople}>
+              <button type="button" class="text-button actor-people-link" onClick={props.onPeople}>
+                {relationshipCopy.open}
+              </button>
+            </Show>
             <div class="actor-sheet-actions">
               <button
                 type="button"
@@ -110,9 +126,25 @@ export default function ActorSheet(props: {
                 </a>
               </Show>
             </div>
-          </section>
-        </div>
-      )}
-    </Show>
+            <Show when={props.onHide}>
+              <div class="actor-reading-control">
+                <button
+                  type="button"
+                  class="secondary-button"
+                  onClick={() => props.onHide?.(profile().id)}
+                >
+                  <Icon name="filter" class="icon--sm" />
+                  {readingCopy.hide}
+                </button>
+                <p class="reading-scope">{readingCopy.scope}</p>
+                <Show when={props.demo}>
+                  <p class="reading-scope">{readingCopy.demoScope}</p>
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </Show>
+    </dialog>
   );
 }

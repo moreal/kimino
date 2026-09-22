@@ -7,6 +7,8 @@
 
 /** Viewport breakpoints, in CSS px. */
 export const BREAKPOINTS = {
+  /** From here the people dialog has room for all four state filters in one row. */
+  peopleFilters: 600,
   /** From here the conversation opens beside the timeline instead of replacing it. */
   wide: 1100,
   /** From here the layout uses the gutter so the thread column fits a full action row. */

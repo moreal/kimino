@@ -1,3 +1,12 @@
+import type { TimelineReadOptions } from '../application/timeline-read';
+import type { RelationshipGateway } from '../application/relationship-types';
+import { createRelationshipGateway } from './relationships';
+import { createOniImageReadGateway } from './oni-image-reader';
+import type { ImageReadGateway } from '../application/image-reader';
+import type { ImageGateway } from '../application/image-types';
+import { imageAudience, sameImageAudience } from '../domain/image-audience';
+import { IMAGE_LIMITS } from '../domain/images';
+import { createOniImageGateway } from './oni-images';
 import { getLogger } from '@logtape/logtape';
 import type { ASObject, Actor, TimelineNote, ClientOptions, ReactionKind } from './types';
 import type { CollectionReach, NoteDraft, Timeline } from '../domain/social';
@@ -38,6 +47,10 @@ function combineReach(parts: CollectionRead[]): CollectionReach {
   return { fetched, missing };
 }
 export class ActivityPubClient {
+  readonly relationships: RelationshipGateway;
+  readonly images?: ImageGateway;
+  readonly imageReader?: ImageReadGateway;
+  private readonly verifiedImages = new Map<string, { mediaType: string; audience: Addressing }>();
   private readonly actorUrl: string;
   private readonly signal?: AbortSignal;
   private readonly token?: string;
@@ -49,6 +62,30 @@ export class ActivityPubClient {
     this.token = options.token;
     this.fetcher = options.fetch ?? globalThis.fetch.bind(globalThis);
     this.maxPages = options.maxPages ?? 100;
+    this.relationships = createRelationshipGateway({
+      actorUrl: this.actorUrl,
+      actor: (signal) => (signal ? this.readActor(signal) : this.actor(true)),
+      maxPages: this.maxPages,
+      request: (url, init) => this.request(url, init),
+      json: (url, signal) => this.json(url, signal),
+    });
+    if (options.mediaMode === 'oni') {
+      this.imageReader = createOniImageReadGateway({
+        actorUrl: this.actorUrl,
+        token: this.token,
+        signal: this.signal,
+        fetch: this.fetcher,
+        proxyUrl: async () => (await this.actor()).proxyUrl,
+      });
+      this.images = createOniImageGateway({
+        actorUrl: this.actorUrl,
+        actor: () => this.actor(),
+        request: (url, init) => this.request(url, init),
+        json: (url) => this.json(url),
+        verified: (id, mediaType, audience) =>
+          this.verifiedImages.set(id, { mediaType, audience: imageAudience(audience) }),
+      });
+    }
     if (!Number.isInteger(this.maxPages) || this.maxPages < 1)
       throw new Error('Page limit must be a positive integer.');
   }
@@ -76,13 +113,15 @@ export class ActivityPubClient {
         headers,
         credentials: 'omit',
         redirect: 'error',
-        signal: this.signal
-          ? AbortSignal.any([this.signal, AbortSignal.timeout(30000)])
-          : AbortSignal.timeout(30000),
+        signal: AbortSignal.any([
+          ...(this.signal ? [this.signal] : []),
+          ...(init.signal ? [init.signal] : []),
+          AbortSignal.timeout(30000),
+        ]),
       });
     } catch (error) {
       // Cancellation by the session is not a server problem and passes through unchanged.
-      if (this.signal?.aborted) throw error;
+      if (this.signal?.aborted || init.signal?.aborted) throw error;
       logger.warn('ActivityPub request did not reach the server', {
         name: error instanceof Error ? error.name : typeof error,
       });
@@ -96,9 +135,11 @@ export class ActivityPubClient {
     }
     return response;
   }
-  private async json(url: string): Promise<ASObject> {
-    const response = await this.request(url);
+  private async json(url: string, signal?: AbortSignal): Promise<ASObject> {
+    signal?.throwIfAborted();
+    const response = await this.request(url, { signal });
     const value: unknown = await response.json();
+    signal?.throwIfAborted();
     if (!record(value)) throw unexpected('Expected an ActivityStreams JSON object.');
     return value;
   }
@@ -108,6 +149,8 @@ export class ActivityPubClient {
    * costs one request per collection and nothing more.
    */
   private known?: Promise<Actor>;
+  /** First validated actor identity survives refresh failures and cache invalidation. */
+  private establishedActorId?: string;
   private actor(fresh = false): Promise<Actor> {
     if (fresh || !this.known)
       this.known = this.readActor().catch((error: unknown) => {
@@ -116,13 +159,17 @@ export class ActivityPubClient {
       });
     return this.known;
   }
-  private async readActor(): Promise<Actor> {
-    const a = await this.json(this.actorUrl),
+  private async readActor(signal?: AbortSignal): Promise<Actor> {
+    const a = await this.json(this.actorUrl, signal),
       id = iri(a),
       inbox = iri(a.inbox),
       outbox = iri(a.outbox);
     if (!id || !inbox || !outbox || !sameOrigin(id, this.actorUrl))
       throw unexpected('Actor must have an id, inbox, and outbox on a trusted actor origin.');
+    const canonicalId = safeUrl(id);
+    if (this.establishedActorId && canonicalId !== this.establishedActorId)
+      throw unexpected('Actor identity changed during this connection. Reconnect explicitly.');
+    this.establishedActorId = canonicalId;
     return {
       id: safeUrl(id),
       inbox: safeUrl(inbox, this.actorUrl),
@@ -132,12 +179,24 @@ export class ActivityPubClient {
       summary: str(a.summary),
       icon: record(a.icon) ? iri(a.icon.url) : iri(a.icon),
       followers: iri(a.followers),
+      following: iri(a.following),
+      proxyUrl: record(a.endpoints) ? iri(a.endpoints.proxyUrl) : undefined,
+      privateMedia: (Array.isArray(a.generator) ? a.generator : [a.generator]).some(
+        (item) =>
+          record(item) && isType(item, 'Service') && item.id === 'urn:kimino:oni:private-media:1',
+      ),
     };
   }
   /** The full walk of both collections, to the end of every `next` chain. */
-  async loadTimeline(): Promise<Timeline> {
-    const actor = await this.actor(true);
-    const collection = this.reader();
+  async loadTimeline(options: TimelineReadOptions = {}): Promise<Timeline> {
+    const signal = AbortSignal.any([
+      ...(this.signal ? [this.signal] : []),
+      ...(options.signal ? [options.signal] : []),
+    ]);
+    const actor = await this.readActor(signal);
+    signal.throwIfAborted();
+    this.known = Promise.resolve(actor);
+    const collection = this.reader(undefined, { ...options, signal });
     const inbox = await collection(actor.inbox);
     const outbox = await collection(actor.outbox);
     const activities = [...inbox.items, ...outbox.items];
@@ -184,11 +243,12 @@ export class ActivityPubClient {
     return { ...this.evaluate(actor, activities, previous.reach), partial: true };
   }
   /** A collection reader over this client's requests; see `createCollectionReader`. */
-  private reader(held?: Map<string, ASObject>) {
+  private reader(held?: Map<string, ASObject>, options: TimelineReadOptions = {}) {
     return createCollectionReader({
-      fetch: (url) => this.json(url),
+      fetch: (url) => this.json(url, options.signal),
       maxPages: this.maxPages,
       held,
+      ...options,
     });
   }
   private evaluate(actor: Actor, activities: ASObject[], reach?: CollectionReach): Timeline {
@@ -210,8 +270,46 @@ export class ActivityPubClient {
     location: string;
     activity: ASObject | null;
   }> {
+    // Keep one immutable submission while actor discovery or other reads are awaited.
+    draft = {
+      ...draft,
+      attachments: draft.attachments?.map((image) => ({
+        ...image,
+        audience: imageAudience(image.audience),
+      })),
+    };
+    replyTo = replyTo ? { ...replyTo, mentions: [...replyTo.mentions] } : undefined;
+    if (draft.images?.length)
+      throw unexpected('Raw images must be uploaded before publishing a Note.');
+    const attachments = draft.attachments;
+    if (attachments?.length && !this.images)
+      throw unexpected('Image attachments require explicit ONI mode.');
     const actor = await this.actor();
+    if (
+      attachments?.length &&
+      draft.visibility !== 'public' &&
+      draft.visibility !== 'unlisted' &&
+      !actor.privateMedia
+    )
+      throw unexpected('This server does not advertise restricted image authoring support.');
     const { to, cc } = buildAddressing(draft.visibility, actor, replyTo);
+    if (attachments && attachments.length > IMAGE_LIMITS.count)
+      throw unexpected('Too many image attachments.');
+    const serialized = attachments?.map((image) => {
+      const id = safeUrl(image.id),
+        url = safeUrl(image.url);
+      if (
+        !sameOrigin(id, this.actorUrl) ||
+        url !== id ||
+        !['image/png', 'image/jpeg', 'image/webp'].includes(image.mediaType) ||
+        image.alt.length > IMAGE_LIMITS.alt ||
+        !sameImageAudience(image.audience, { to, cc }) ||
+        this.verifiedImages.get(id)?.mediaType !== image.mediaType ||
+        !sameImageAudience(this.verifiedImages.get(id)!.audience, { to, cc })
+      )
+        throw unexpected('Invalid ONI image attachment.');
+      return { type: 'Image', id, url, name: image.alt, mediaType: image.mediaType };
+    });
     const content = htmlFromPlain(draft.content);
     const object: ASObject = {
       type: 'Note',
@@ -221,6 +319,7 @@ export class ActivityPubClient {
       to,
       cc,
     };
+    if (serialized?.length) object.attachment = serialized;
     // Servers drop `sensitive`; a non-empty summary is the interoperable content warning.
     const summary = draft.summary?.trim();
     if (summary) object.summary = summary;
