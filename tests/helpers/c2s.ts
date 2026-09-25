@@ -210,9 +210,9 @@ export async function pushPastFirstPage(
   request: APIRequestContext,
   credentials: Credentials,
   objectUrl: string,
+  extras: string[] = [],
 ): Promise<string[]> {
   await page.waitForTimeout(1100);
-  const extras: string[] = [];
   for (let i = 0; i < 21; i++) {
     const response = await postToOutbox(request, credentials, {
       type: 'Create',
@@ -235,7 +235,7 @@ export async function pushPastFirstPage(
       credentials,
       (activity) => activity.type === 'Create' && objectIri(activity) === createdObject,
       `the Create reaches the outbox before another fixture write: ${createdObject}`,
-      1,
+      2,
     );
   }
   const firstPage = await findInOutbox(

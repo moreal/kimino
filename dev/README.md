@@ -42,4 +42,19 @@ To deliberately discard this development server's posts, tokens and CA, run `doc
 - `POST Like`/`Announce` to the outbox return HTTP 201 without `Location`; the stored activity then appears on the first outbox page with its Note embedded. `POST Undo` of such an activity currently returns HTTP 400. `python3 scripts/c2s-interactions-probe.py` re-checks these facts by writing real reactions to the local fixture.
 - Development ONI builds do not use production-compatible federation signatures. Public S2S federation is outside this fixture's scope.
 
+## Outbox pagination tests
+
+ONI timestamps activities to the second. The test that pushes a note beyond the
+20-item first page can create 21 extras with the same timestamp; its newest
+accepted activity may therefore appear on page two. The fixture waits for each
+write to become visible across two pages before sending another POST. It still
+checks only page one when asserting that the original note has been displaced.
+Increasing the polling timeout cannot fix an activity that is already on page two.
+
+`tests/c2s-fixture.spec.ts` deterministically exercises tied ordering, delayed
+visibility, the original-note exclusion and cleanup IDs after partial setup.
+Both real edit/delete scenarios keep setup inside their cleanup boundary so a
+failed preparation does not leave its known created notes behind. The browser's
+production read-after-write behavior is unchanged.
+
 References: [ONI setup](https://mariusor.srht.site/apps/oni/index.html), [ONI OAuth](https://mariusor.srht.site/apps/oni/third-party-oauth-client.html), [W3C ActivityPub C2S](https://www.w3.org/TR/activitypub/#client-to-server-interactions).

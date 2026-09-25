@@ -316,8 +316,9 @@ test('real ONI: editing a note whose Create fell past the first outbox page show
   const credentials = readCredentials();
   await connect(page, credentials);
   const { objectUrl } = await publishNote(page, `오래된 이야기 ${Date.now()}`);
-  const extras = await pushPastFirstPage(page, request, credentials, objectUrl);
+  const extras: string[] = [];
   try {
+    await pushPastFirstPage(page, request, credentials, objectUrl, extras);
     const origin = new URL(credentials.actorUrl).origin;
     const gets: string[] = [];
     let counting = false;
@@ -368,8 +369,9 @@ test('real ONI: deleting a note whose Create fell past the first outbox page rem
   const credentials = readCredentials();
   await connect(page, credentials);
   const { objectUrl } = await publishNote(page, `오래되어 지울 이야기 ${Date.now()}`);
-  const extras = await pushPastFirstPage(page, request, credentials, objectUrl);
+  const extras: string[] = [];
   try {
+    await pushPastFirstPage(page, request, credentials, objectUrl, extras);
     const mine = page.locator(`article.note-card[data-note="${objectUrl}"]`);
     await expect(mine).toHaveCount(1);
     await manage(mine, '내 글 삭제하기');
@@ -397,7 +399,7 @@ test('real ONI: deleting a note whose Create fell past the first outbox page rem
       'the outbox rewrites the deleted note before cleanup starts',
     );
   } finally {
-    await deleteAll(request, credentials, extras);
+    await deleteAll(request, credentials, [...extras, objectUrl]);
   }
 });
 
