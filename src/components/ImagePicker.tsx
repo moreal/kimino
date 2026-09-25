@@ -148,46 +148,81 @@ export default function ImagePicker(props: {
     }
   }
 
+  function removeImage(id: string, index: number, button: HTMLButtonElement) {
+    const restore = document.activeElement === button;
+    props.onRemove(id);
+    if (!restore) return;
+    queueMicrotask(() =>
+      requestAnimationFrame(() => {
+        if (disposed || !fieldset?.isConnected || document.activeElement !== document.body) return;
+        const descriptions = fieldset.querySelectorAll<HTMLTextAreaElement>(
+          '.image-picker-alt textarea:not(:disabled)',
+        );
+        const target =
+          descriptions[Math.min(index, descriptions.length - 1)] ??
+          fieldset.querySelector<HTMLButtonElement>(
+            '.image-picker-toolbar button:not(:disabled)',
+          ) ??
+          fieldset.closest('form')?.querySelector<HTMLTextAreaElement>('.compose-input textarea');
+        target?.focus();
+      }),
+    );
+  }
+
   return (
     <fieldset class="image-picker" ref={(el) => (fieldset = el)}>
       <legend class="sr-only">{mediaCopy.legend}</legend>
-      <div class="image-picker-toolbar">
-        <button
-          type="button"
-          class="quiet-button"
-          disabled={
-            !allowed() || props.busy || reading() || props.images.length >= imageLimits.count
-          }
-          onClick={() => input?.click()}
-        >
-          {mediaCopy.add}
-        </button>
-        <span class="image-picker-count">{mediaCopy.count(props.images.length)}</span>
-        <input
-          ref={(el) => {
-            input = el;
-          }}
-          hidden
-          type="file"
-          accept={imageAccept}
-          multiple
-          tabindex={-1}
-          aria-label={mediaCopy.add}
-          disabled={!allowed() || props.busy || reading()}
-          onChange={(event) => {
-            const files = Array.from(event.currentTarget.files ?? []);
-            event.currentTarget.value = '';
-            void selectFiles(files);
-          }}
-        />
-      </div>
-      <p class="image-picker-help">
-        {!imageAudienceAllowed(props.visibility, props.privateEnabled)
-          ? mediaCopy.scope
-          : !props.enabled
-            ? mediaCopy.unsupported
-            : mediaCopy.limits}
-      </p>
+      <Show
+        when={props.enabled || props.images.length > 0}
+        fallback={
+          <details class="image-picker-guidance">
+            <summary>{mediaCopy.helpHeading}</summary>
+            <p class="image-picker-help">
+              {!imageAudienceAllowed(props.visibility, props.privateEnabled)
+                ? mediaCopy.scope
+                : mediaCopy.unsupported}
+            </p>
+          </details>
+        }
+      >
+        <div class="image-picker-toolbar">
+          <button
+            type="button"
+            class="quiet-button"
+            disabled={
+              !allowed() || props.busy || reading() || props.images.length >= imageLimits.count
+            }
+            onClick={() => input?.click()}
+          >
+            {mediaCopy.add}
+          </button>
+          <span class="image-picker-count">{mediaCopy.count(props.images.length)}</span>
+          <input
+            ref={(el) => {
+              input = el;
+            }}
+            hidden
+            type="file"
+            accept={imageAccept}
+            multiple
+            tabindex={-1}
+            aria-label={mediaCopy.add}
+            disabled={!allowed() || props.busy || reading()}
+            onChange={(event) => {
+              const files = Array.from(event.currentTarget.files ?? []);
+              event.currentTarget.value = '';
+              void selectFiles(files);
+            }}
+          />
+        </div>
+        <p class="image-picker-help">
+          {!imageAudienceAllowed(props.visibility, props.privateEnabled)
+            ? mediaCopy.scope
+            : !props.enabled
+              ? mediaCopy.unsupported
+              : mediaCopy.limits}
+        </p>
+      </Show>
       <Show
         when={
           props.enabled &&
@@ -246,7 +281,7 @@ export default function ImagePicker(props: {
                       type="button"
                       class="quiet-button"
                       disabled={props.busy || !!resolving()}
-                      onClick={() => props.onRemove(image().id)}
+                      onClick={(event) => removeImage(image().id, index(), event.currentTarget)}
                     >
                       {mediaCopy.remove(index() + 1)}
                     </button>

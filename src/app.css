@@ -710,17 +710,15 @@ kbd {
   flex: 1;
   min-width: 0;
 }
-/* Demo pill: one thin line (≤36px) with a text-link CTA whose tap target still reaches 44px. */
 .demo-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
   min-height: 32px;
-  max-height: 36px;
   overflow: visible;
   margin: var(--s-2) var(--space-page) 0;
-  padding: 0 var(--s-2) 0 var(--s-3);
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-3);
   border: 1px solid var(--accent-line);
   border-radius: var(--r-pill);
   background: var(--accent-soft);
@@ -731,9 +729,7 @@ kbd {
 .demo-pill > span {
   flex: 1;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
 }
 .demo-pill-action {
   min-height: var(--tap);
@@ -1412,6 +1408,9 @@ kbd {
   display: flex;
   gap: var(--s-3);
 }
+.compose-account {
+  display: none;
+}
 .compose-input {
   min-width: 0;
   width: 100%;
@@ -1554,6 +1553,7 @@ kbd {
 .main-composer .composer--collapsed .draft-hint,
 .main-composer .composer--collapsed .compose-options,
 .main-composer .composer--collapsed .visibility-limit,
+.main-composer .composer--collapsed .compose-account,
 .main-composer .composer--collapsed .image-picker {
   display: none;
 }
@@ -1562,12 +1562,16 @@ kbd {
 }
 
 /* Local image drafts: preview first, editable description alongside it. */
-.connection-capabilities {
+.connection-capabilities,
+.connection-guidance,
+.image-picker-guidance {
   font-size: var(--t-sm);
   line-height: var(--lh-sm);
   color: var(--ink-muted);
 }
-.connection-capabilities summary {
+.connection-capabilities summary,
+.connection-guidance summary,
+.image-picker-guidance summary {
   cursor: pointer;
   min-height: var(--tap);
   display: list-item;
@@ -3202,14 +3206,6 @@ a.reply-context {
   .character-count:not(.character-count--over) {
     display: none;
   }
-  /* The whole sentence, on two lines if it must: a clipped "게시·답글·좋아요…" says nothing. */
-  .demo-pill {
-    max-height: none;
-    padding-block: var(--s-1);
-  }
-  .demo-pill > span {
-    white-space: normal;
-  }
   .note-card {
     gap: var(--s-3);
   }
@@ -3224,9 +3220,19 @@ a.reply-context {
     scroll-margin-bottom: calc(56px + var(--s-3) + env(safe-area-inset-bottom));
   }
   /* 16px keeps iOS from zooming the page when the field takes focus. */
-  .compose-input textarea {
+  .compose-input textarea,
+  .compose-warning input,
+  .search-field input {
     font-size: var(--t-md);
     line-height: var(--lh-md);
+  }
+  .compose-account {
+    display: block;
+    margin: 0 0 var(--s-2);
+    color: var(--ink-muted);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    overflow-wrap: anywhere;
   }
   .thread-reply .note-card {
     padding-left: calc(var(--space-page) + var(--s-2));
@@ -3329,6 +3335,9 @@ a.reply-context {
 /* On a phone the tab bar owns the bottom edge: the control sits above it, never on 새 글 쓰기,
    and the toast stands one slot higher so the two never meet. */
 @media (max-width: 650px) {
+  .app-shell:has(.composer:focus-within) .to-top {
+    visibility: hidden;
+  }
   .to-top {
     right: 0;
     left: 0;
@@ -3373,6 +3382,7 @@ a.reply-context {
 @container card (max-width: 511px) {
   .note-actions {
     flex-wrap: wrap;
+    justify-content: space-between;
     overflow-x: visible;
     gap: var(--s-1) 0;
     margin-left: calc(var(--s-1) * -1);

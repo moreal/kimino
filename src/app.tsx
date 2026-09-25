@@ -247,9 +247,8 @@ export default function App(props: {
                 />
               )}
             </Show>
-            <Show
-              when={connected()}
-              fallback={
+            <Show when={!state().actor}>
+              <div hidden={connected()}>
                 <ConnectionPanel
                   initialUrl={untrack(() => preferences.read('actor')) || ''}
                   busy={state().connecting}
@@ -260,8 +259,9 @@ export default function App(props: {
                   }
                   onExplore={() => void shell.explore()}
                 />
-              }
-            >
+              </div>
+            </Show>
+            <Show when={connected()}>
               <PageHeader
                 state={state()}
                 title={placement().title}

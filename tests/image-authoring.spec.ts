@@ -128,6 +128,35 @@ async function selectImage(page: Page) {
   await expect(page.getByLabel('이미지 1 대체 텍스트')).toBeVisible();
 }
 
+test('removing images keeps keyboard focus in the image workflow without uploading', async ({
+  page,
+}) => {
+  const server = await mediaServer(page);
+  await connectImages(page);
+  await page.locator('.main-composer input[type=file]').setInputFiles([file, file, file]);
+  const descriptions = page.locator('.image-picker-alt textarea');
+  await expect(descriptions).toHaveCount(3);
+  await descriptions.nth(0).fill('첫 이미지');
+  await descriptions.nth(1).fill('둘째 이미지');
+  await descriptions.nth(2).fill('셋째 이미지');
+  const remove = page.locator('.image-picker-actions button');
+  await remove.nth(1).focus();
+  await page.keyboard.press('Enter');
+  await expect(descriptions).toHaveCount(2);
+  await expect(descriptions.nth(1)).toBeFocused();
+  await expect(descriptions.nth(1)).toHaveValue('셋째 이미지');
+  await remove.nth(1).focus();
+  await page.keyboard.press('Enter');
+  await expect(descriptions).toHaveCount(1);
+  await expect(descriptions.nth(0)).toBeFocused();
+  await expect(descriptions.nth(0)).toHaveValue('첫 이미지');
+  await remove.nth(0).focus();
+  await page.keyboard.press('Enter');
+  await expect(descriptions).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '이미지 추가', exact: true })).toBeFocused();
+  expect(server.counts()).toEqual({ images: 0, notes: 0, binary: 0 });
+});
+
 test('local image selection preserves alt drafts without requests, and confirmed uploads survive a Note failure', async ({
   page,
 }) => {

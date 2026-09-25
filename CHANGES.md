@@ -52,6 +52,15 @@ To be released.
     reproducible two-account experimental fixture supports C2S follow delivery
     and private-media workflows. Its server patches and compatibility evidence
     are documented; support for unpatched ONI or other servers is not implied.
+ -  Separate note actions more clearly in narrow reading columns and show the
+    complete preview explanation at desktop widths as well as on phones.
+ -  Simplify unavailable image controls and empty people lists, explain where
+    connection credentials come from, and identify the posting account on
+    phones. Keep account lookup errors visible alongside relationship failures,
+    protect in-progress IME input from composer shortcuts, retain keyboard
+    focus after removing images, and keep floating controls clear while writing
+    on phones. Failed connections retain the entered address, token and options
+    in memory for correction; successful connection clears the form.
  -  With explicit ONI mode, attach up to four PNG, JPEG, or WebP images of
     up to 5 MiB each, with local previews and alternative text. Images are
     uploaded only when posting, and drafts stay in memory.

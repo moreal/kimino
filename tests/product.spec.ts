@@ -182,14 +182,23 @@ test.describe('preview mode after round 4', () => {
     await expect(page.locator('.draft-badge')).toHaveCount(0);
   });
 
-  test('header is quiet: no update stamp, a thin preview line, and a read-only thread label', async ({
+  test('header is quiet: no update stamp, a readable preview line, and a read-only thread label', async ({
     page,
   }) => {
     await expect(page.locator('.page-header')).not.toContainText('업데이트');
     const pill = page.locator('.demo-pill');
-    expect(
-      await pill.evaluate((element) => element.getBoundingClientRect().height),
-    ).toBeLessThanOrEqual(36);
+    for (const width of [390, 1100, 1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(
+        await pill
+          .locator(':scope > span')
+          .evaluate(
+            (element) =>
+              element.scrollWidth <= element.clientWidth &&
+              element.scrollHeight <= element.clientHeight,
+          ),
+      ).toBe(true);
+    }
     await expect(pill.getByRole('button', { name: '계정 연결', exact: true })).toBeVisible();
     const original = page.locator('.note-card').filter({ hasText: '커피 한 잔' });
     const thread = original.getByRole('button', { name: '대화 1', exact: true });
@@ -415,9 +424,9 @@ test.describe('content warnings, attachments and visibility', () => {
     await expect(composer.locator('.compose-options')).toBeHidden();
     await composer.getByLabel('새 글').click();
     await expect(composer.locator('.compose-options')).toBeVisible();
-    // What the composer cannot do is said here, not implied by a missing button.
+    await composer.getByText('이미지 첨부 안내', { exact: true }).click();
     await expect(composer.locator('.image-picker-help')).toContainText('ONI 이미지 게시 사용');
-    await expect(composer.locator('input[type="file"]')).toBeDisabled();
+    await expect(composer.locator('input[type="file"]')).toHaveCount(0);
     await expect(composer.getByRole('radio', { name: '공개', exact: true })).toBeChecked();
     await expect(composer.locator('.visibility')).toContainText('누구나 볼 수 있어요');
     await composer.getByRole('radio', { name: '팔로워만' }).check();

@@ -1,4 +1,4 @@
-import { createSignal, For, Show, untrack } from 'solid-js';
+import { createEffect, createSignal, For, Show, untrack } from 'solid-js';
 import { connectionCopy as text, copy, DEV_SERVER_URL } from '../presentation/copy';
 import FailureAlert from './FailureAlert';
 import { mediaCopy } from '../presentation/copy-media';
@@ -21,6 +21,20 @@ export default function ConnectionPanel(props: {
   const [token, setToken] = createSignal('');
   const [remember, setRemember] = createSignal(false);
   const [mediaEnabled, setMediaEnabled] = createSignal(false);
+  let failure: HTMLElement | undefined;
+  createEffect(
+    () => props.error,
+    (error) => {
+      if (!error) return;
+      queueMicrotask(() =>
+        requestAnimationFrame(() => {
+          if (!failure?.isConnected) return;
+          failure.scrollIntoView({ block: 'nearest' });
+          failure.focus({ preventScroll: true });
+        }),
+      );
+    },
+  );
   return (
     <section class="connection-panel">
       <h1>{text.tagline}</h1>
@@ -52,6 +66,12 @@ export default function ConnectionPanel(props: {
         <h2 id="connection-heading" class="connection-heading">
           {text.accountHeading}
         </h2>
+        <details class="connection-guidance">
+          <summary>{text.credentialsHeading}</summary>
+          <p>{text.credentialsAddress}</p>
+          <p>{text.credentialsToken}</p>
+          <p>{text.credentialsCompatibility}</p>
+        </details>
         <label>
           <span id="actor-url-label">{text.actorUrlLabel}</span>
           <input
@@ -108,6 +128,7 @@ export default function ConnectionPanel(props: {
         </details>
         <Show when={props.error}>
           <FailureAlert
+            ref={(element) => (failure = element)}
             heading={text.connectFailed}
             lines={[props.error, text.connectFailedHelp]}
             detail={props.errorDetail}

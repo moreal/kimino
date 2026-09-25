@@ -52,9 +52,10 @@ for (const width of [390, 1440]) {
     const composer = page.locator('.inline-reply');
     const audience = composer.locator('.reply-audience');
     await expect(audience).toBeVisible();
+    await composer.getByText('이미지 첨부 안내', { exact: true }).click();
     await expect(composer.locator('.image-picker-help')).toContainText('공개와 조용히 공개 글에만');
     await expect(composer.locator('.image-picker-help')).not.toContainText('연결 화면');
-    await expect(composer.getByRole('button', { name: '이미지 추가', exact: true })).toBeDisabled();
+    await expect(composer.getByRole('button', { name: '이미지 추가', exact: true })).toHaveCount(0);
     await expect(audience).toContainText(bob);
     await expect(audience).toContainText(carol);
     await expect(audience).not.toContainText(actor);

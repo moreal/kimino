@@ -8,6 +8,7 @@ export const mediaCopy = {
   enableHelp:
     'ONI 서버의 이미지 게시 방식으로 연결해요. 다른 C2S 서버에서는 지원되지 않을 수 있어요.',
   legend: '이미지 첨부',
+  helpHeading: '이미지 첨부 안내',
   add: '이미지 추가',
   limits: 'PNG, JPEG, WebP · 최대 4장 · 한 장당 5 MiB',
   unsupported:

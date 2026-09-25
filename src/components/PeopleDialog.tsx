@@ -43,6 +43,7 @@ export default function PeopleDialog(props: {
   const [input, setInput] = createSignal('');
   const [inspected, setInspected] = createSignal('');
   const [error, setError] = createSignal('');
+  const [refreshError, setRefreshError] = createSignal('');
   const [refreshing, setRefreshing] = createSignal(false);
   const targets = () => relationshipTargets(props.state);
   const candidate = () => inspected() || props.discovery?.result?.actorUrl || '';
@@ -60,6 +61,7 @@ export default function PeopleDialog(props: {
       setSection('find');
       setInspected('');
       setError('');
+      setRefreshError('');
       setRefreshing(false);
     },
   );
@@ -99,11 +101,11 @@ export default function PeopleDialog(props: {
     if (refreshing()) return;
     const current = generation;
     setRefreshing(true);
-    setError('');
+    setRefreshError('');
     try {
       await props.onRefresh();
     } catch {
-      if (current === generation) setError(copy.readFailed);
+      if (current === generation) setRefreshError(copy.readFailed);
     } finally {
       if (current === generation) setRefreshing(false);
     }
@@ -224,6 +226,11 @@ export default function PeopleDialog(props: {
                   ? copy.inspect
                   : discoveryCopy.find}
             </button>
+            <Show when={discoveryErrorText(props.discovery) || error()}>
+              <p class="people-error" role="alert">
+                {discoveryErrorText(props.discovery) || error()}
+              </p>
+            </Show>
           </form>
           <Show when={candidate()}>
             <div class="people-candidate">
@@ -245,13 +252,9 @@ export default function PeopleDialog(props: {
             </div>
           </Show>
         </Show>
-        <Show
-          when={
-            relationshipReadError(props.state) || discoveryErrorText(props.discovery) || error()
-          }
-        >
+        <Show when={relationshipReadError(props.state) || refreshError()}>
           <p class="people-error" role="alert">
-            {relationshipReadError(props.state) || discoveryErrorText(props.discovery) || error()}
+            {relationshipReadError(props.state) || refreshError()}
           </p>
         </Show>
         <Show when={props.state?.phase === 'error'}>
@@ -261,33 +264,35 @@ export default function PeopleDialog(props: {
           <p class="people-help">{copy.unsupported}</p>
         </Show>
         <Show when={section() === 'manage'}>
-          <div class="people-list-controls">
-            <p class="people-help">{copy.knownCounts}</p>
-            <div class="people-filters" role="group" aria-label={copy.filters}>
-              <For each={['all', 'following', 'requested', 'attention'] as const}>
-                {(value) => (
-                  <button
-                    type="button"
-                    class="quiet-button"
-                    aria-pressed={filter() === value ? 'true' : 'false'}
-                    onClick={() => setFilter(value)}
-                  >
-                    {copy.filterLabels[value]} <span>{list().counts[value]}</span>
-                  </button>
-                )}
-              </For>
+          <Show when={targets().length > 0}>
+            <div class="people-list-controls">
+              <p class="people-help">{copy.knownCounts}</p>
+              <div class="people-filters" role="group" aria-label={copy.filters}>
+                <For each={['all', 'following', 'requested', 'attention'] as const}>
+                  {(value) => (
+                    <button
+                      type="button"
+                      class="quiet-button"
+                      aria-pressed={filter() === value ? 'true' : 'false'}
+                      onClick={() => setFilter(value)}
+                    >
+                      {copy.filterLabels[value]} <span>{list().counts[value]}</span>
+                    </button>
+                  )}
+                </For>
+              </div>
+              <label class="people-search">
+                <span>{copy.search}</span>
+                <input
+                  type="search"
+                  value={query()}
+                  placeholder={copy.searchPlaceholder}
+                  onInput={(event) => setQuery(event.currentTarget.value)}
+                />
+              </label>
+              <p class="people-help">{copy.searchScope}</p>
             </div>
-            <label class="people-search">
-              <span>{copy.search}</span>
-              <input
-                type="search"
-                value={query()}
-                placeholder={copy.searchPlaceholder}
-                onInput={(event) => setQuery(event.currentTarget.value)}
-              />
-            </label>
-            <p class="people-help">{copy.searchScope}</p>
-          </div>
+          </Show>
           <Show
             when={list().targets.length > 0}
             fallback={
@@ -311,7 +316,7 @@ export default function PeopleDialog(props: {
                   </button>
                 </Show>
                 <Show when={!targets().length}>
-                  <button class="secondary-button" onClick={() => chooseSection('find')}>
+                  <button class="primary-button" onClick={() => chooseSection('find')}>
                     {copy.findPeople}
                   </button>
                 </Show>

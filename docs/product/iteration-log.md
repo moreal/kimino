@@ -2434,3 +2434,130 @@ No outstanding required implementation work was identified by the local-scope
 completion audit; other-server research remains explicitly deferred by the user.
 No commits, pushes or publication. The sections below retain the investigation
 history and earlier evidence; do not restart completed probes from them.
+
+## 2026-09-25: visual reading polish
+
+Scope: focused review of the existing Solid 2/plain-CSS interface, preserving its
+color, type, spacing, icon and responsive tokens. Playwright screenshots inspected
+the welcome screen, preview timeline at 320/390/1100/1280/1440px, dark conversation
+panel and the phone's final post after scrolling to the bottom. This iteration
+does not claim new server compatibility or real-user research.
+
+| Category | Evidence | Result |
+| --- | --- | --- |
+| Typography | Preview banner and note action labels | Desktop truncation fixed |
+| Surfaces | Timeline, conversation, fixed phone navigation | Action separation improved; final row reachable |
+| Icons | Action controls in light/dark captures | Existing icons and selected states retained |
+| Animations | No motion changes | Slow-motion audit not performed |
+| Performance | Two layout rules, existing CSS system | No dependencies or runtime work added; frame profiling not performed |
+
+| Severity | Location | Before | After | Why |
+| --- | --- | --- | --- | --- |
+| P2 | `src/app.css`, narrow `.note-actions` | Labels read as one packed strip | Available space separates adjacent controls | Faster action recognition without shrinking targets |
+| P2 | `src/app.css`, `.demo-pill` | Desktop explanation ellipsized | Complete text wraps at every width | Readers can see the preview's posting restriction |
+
+Considered and rejected: replacing the existing palette would add inconsistency
+without addressing a demonstrated problem; hiding more action labels would make
+the crowded row harder to understand. The existing design system remains in use.
+
+An independent simulated user-perspective reviewer identified both P2 findings,
+then inspected the revised 1100px/390px/dark-thread captures and cleared both.
+An initial bottom capture stopped before the end of the document; a new capture
+at maximum scroll proved the final action row (y661.5–705.5) sits above navigation
+(y787) in a 390x844 viewport. Reviewer rechecked that capture: no scoped blockers.
+
+Verification: `npx playwright test tests/product.spec.ts tests/ui.spec.ts` passed
+138/138, including nested action rows, keyboard flows, composer visibility and
+touch targets. The banner regression first failed at desktop width, then passed
+across 390/1100/1280/1440px after the fix. Full check initially passed 836 unit
+tests/types/format/build but required synchronizing the new Sacho fragment.
+After synchronization, `npm run check` passed all 836 unit tests, formatting,
+types, production build and Sacho. `git diff --check` passed. Scoped verdict:
+Approve; slow-motion inspection and frame profiling remain outside this static
+layout change. No outstanding implementation work for the visual findings.
+
+## 2026-09-25: broader interface and recovery review
+
+The preceding completion statement was scoped to two CSS findings, not the whole
+interface. After the user challenged that scope, this pass reviewed actual flows
+with synthetic C2S data and an explicit coverage plan in
+`interface-quality-plan.md`. No real-user research is claimed.
+
+### Evidence and iterations
+
+1. Captured welcome, search-empty, saved-empty, preview people, connected feed,
+   compose, rejected publish, people find/empty, profile, reply and dark reply at
+   390 and 1440px. An independent source reviewer separately audited controls,
+   focus, input behavior and feedback. Images: `/tmp/kimino-ux-round1`.
+2. Implemented findings below and repeated the entire capture flow, not just the
+   fixed components (`/tmp/kimino-ux-round2`). Independent simulated user review
+   inspected 15 screens: original P2 hierarchy issues resolved, no fresh P1/P2.
+3. Expanded to 320px, 768px and 390x400 viewports. The short-screen capture exposed
+   the floating top button over composer options; fixed and recaptured
+   (`/tmp/kimino-ux-narrow`, `/tmp/kimino-ux-short-final`). Independent review of
+   these plus supported-media/hidden-author/help screens found no P1/P2 blocker.
+4. Coordinator inspected credential help, hidden-author reversal, dark saved
+   feedback, reduced-motion loading, supported private-media authoring and 401
+   recovery. The 401 screen revealed erased connection inputs despite the earlier
+   source review. A RED regression confirmed remounting caused data loss; the
+   pending form now stays mounted and hidden until success. Failure reveals the
+   same in-memory inputs and focuses the error; successful connection removes the
+   password input, and disconnect starts a new empty token field.
+
+### Findings and decisions
+
+| Severity | Location | Before | After | User impact |
+| --- | --- | --- | --- | --- |
+| P2 | `ImagePicker.tsx` | Unavailable toolbar/count/setup copy repeated in every composer | Compact expandable help; supported controls and retained drafts remain | Less distraction while writing |
+| P2 | `PeopleDialog.tsx` | Empty list showed filters, counts and search | Empty explanation and primary Find action | Clear first action |
+| P2 | `ConnectionPanel.tsx`, `copy.ts` | No adjacent credential acquisition explanation | Collapsible server-settings/admin guidance | Explains Actor URL, token vs password, account limitations |
+| P2 | `Composer.tsx`, `FeedList.tsx` | Phone editor identified author only as “나” | Expanded phone editor names publishing account | Authorship visible before sending |
+| P2 | `PeopleDialog.tsx` | Relationship read errors masked lookup errors | Separate form and relationship feedback | Correct the relevant input without losing read failure |
+| P2 | `Composer.tsx` | Escape/submit shortcuts fired during IME composition | Ignore composing keyboard events | Protect unfinished composition and drafts |
+| P2 | `ImagePicker.tsx` | Removing focused image dropped focus to document | Next/previous description, then Add or editor fallback | Continue keyboard editing predictably |
+| P2 | `app.css` | Phone search/warning inputs at 14/15px | Existing 16px input token applied | Readable input, avoids undersized iOS field treatment |
+| P2 | `app.css` | Floating top button over focused short-screen composer | Hide while composing, restore afterward | Audience controls stay clear |
+| P2 | `app.tsx`, `ConnectionPanel.tsx` | Failed connection recreated empty form | Retain inputs only in memory through the attempt | Correct credentials and retry without retyping everything |
+
+Rejected alternatives: no new styling library/palette; the current shared tokens
+already support coherent light/dark surfaces. Do not remove recipient or upload
+retention disclosures to shorten private composition. Profile reordering remains
+optional P3: the current exact address and local privacy scope are useful before
+following/hiding. Display name plus handle in the mobile composer is optional P3;
+the account sheet retains full identity. No redesign solely to obtain approval.
+
+### Coverage and limits
+
+| Category | Evidence | Assessment |
+| --- | --- | --- |
+| Typography | Actual 320/390/768/1440 captures, input computed styles | Labels and fields legible; narrowed fields use token scale |
+| Surfaces | Full flow and short-viewport screenshots, layout tests | Main hierarchy and overlap findings addressed |
+| Icons | Shared icon set, enabled/disabled and selected states | No icon replacement or new inconsistency |
+| Motion | Reduced-motion skeleton and saved toast, existing CSS rules | Both rendered with animation none and static meaning retained; no new motion |
+| Performance | CSS-only layout and small event handlers | No new dependency, repeated network work or render-loop work; frame profiling not performed |
+
+Independent code review found no concrete new issue in the initial component
+changes, including capability loss, retained image drafts and delayed focus.
+Connection-retry follow-up review and final verification are recorded after they
+complete. Regression tests reproduced each behavioral bug before fixes. Native
+iOS zoom and OS IME candidate windows were not exercised: evidence is computed
+font size and synthetic `isComposing` browser events. Screen-reader speech and
+real-server delivery are not certified by these UI checks.
+
+First broad run: 186/187 passed; the remaining test expected the intentionally
+removed disabled file input. Updated it to open the disclosure, assert the
+explanation and absence of unavailable upload control, preserving audience checks.
+The full check passed 836 units/types/format/build but requested Sacho fragment
+normalization. Final checks are rerun after the connection fix and normalization.
+
+Connection follow-up independent review found no concrete token-lifecycle,
+hidden-form navigation or delayed-focus issue. Final 401 screenshot
+`/tmp/kimino-connection-retry-final.png` shows retained synthetic address/masked
+token and the focused visible failure; `/tmp/kimino-loading-reduced.png` shows
+static loading skeletons. Final `npm run check` passed 836 units, formatting,
+types, production build and Sacho after normalization. Final full UI suite passed
+188/188 (1.7 minutes), including restoration/loading, connection retry, keyboard
+composition, failed drafts, image receipts and audience constraints. Final
+`git diff --check` passed. No outstanding P1/P2 finding in reviewed flows;
+optional P3 and real-device verification limits remain explicitly recorded above.
+No commits, pushes or deployments were made.

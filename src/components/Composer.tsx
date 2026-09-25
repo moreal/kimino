@@ -181,7 +181,7 @@ export default function Composer(props: {
    * checks `defaultPrevented`) never fires instead.
    */
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
     if ((!props.replyTo && !props.editing) || !props.onCancel || pending()) return;
     event.preventDefault();
     props.onCancel();
@@ -253,6 +253,13 @@ export default function Composer(props: {
           />
         </label>
       </Show>
+      <Show when={props.self}>
+        {(self) => (
+          <p class="compose-account">
+            {copy.composer.publishingAs(actorLabelOf(self().id, self()))}
+          </p>
+        )}
+      </Show>
       <div class="compose-row">
         <div class="avatar self" aria-hidden="true">
           {copy.composer.self}
@@ -280,7 +287,8 @@ export default function Composer(props: {
             onFocus={() => setExpanded(true)}
             onInput={(event) => setText(event.currentTarget.value)}
             onKeyDown={(event) => {
-              if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void submit(event);
+              if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter')
+                void submit(event);
             }}
           />
         </label>

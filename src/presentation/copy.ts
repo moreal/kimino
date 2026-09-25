@@ -188,6 +188,7 @@ export const copy = {
   /** The composer's own words: labels, placeholders, the submit control, the key hints. */
   composer: {
     self: '나',
+    publishingAs: (name: string) => `${name} 계정으로 작성`,
     newLabel: '새 글',
     newPlaceholder: '지금, 어떤 생각을 하고 있나요?',
     replyLabel: '답글 내용',
@@ -351,6 +352,13 @@ export const connectionCopy = {
   previewHelp: '가입 없이 예시 글을 읽고, 대화와 저장을 체험해보세요. 실제로 게시되지는 않아요.',
   previewPrivacy: '미리보기에서 보관하는 정보',
   accountHeading: 'C2S 계정 연결',
+  credentialsHeading: '계정 주소와 토큰은 어디서 찾나요?',
+  credentialsAddress:
+    '사용 중인 C2S 서버의 계정 설정이나 관리 안내에서 ActivityPub 계정 주소(Actor URL)를 확인해 주세요. 프로필 페이지 주소와 다를 수 있어요.',
+  credentialsToken:
+    '인증이 필요한 서버에서는 그 서버가 발급한 액세스 토큰을 사용해요. 계정 비밀번호를 입력하는 곳은 아니에요. 찾을 수 없다면 서버 관리자에게 C2S 연결 방법을 문의해 주세요.',
+  credentialsCompatibility:
+    'Kimino에서 새 계정을 만들지는 않아요. Mastodon 계정은 연결할 수 없으며, 준비된 C2S 계정이 없다면 먼저 둘러보기로 체험할 수 있어요.',
   actorUrlLabel: '계정 주소 (Actor URL)',
   /** A generic account example; local fixture instructions stay in developer help. */
   actorUrlPlaceholder: 'https://social.example/users/me',

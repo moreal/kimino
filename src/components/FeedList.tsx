@@ -170,6 +170,7 @@ export default function FeedList(props: {
           {/* The draft comes from the state this component already tracks, never from
               `vm.draft`: a plain snapshot read would freeze the counter and the value. */}
           <Composer
+            self={props.state.actor}
             draft={props.state.drafts.new ?? ''}
             options={props.state.composeOptions.new}
             onOptions={(value) => props.vm.setComposeOptions('new', value)}

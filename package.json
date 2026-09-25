@@ -18,7 +18,7 @@
     "c2s:seed": "python3 scripts/c2s-seed.py",
     "c2s:smoke": "python3 scripts/c2s-smoke.py",
     "c2s:down": "docker compose down",
-    "test:e2e:ui": "playwright test tests/ui.spec.ts tests/reading-controls.spec.ts tests/image-authoring.spec.ts tests/relationships.spec.ts tests/history.spec.ts tests/relationship-history.spec.ts tests/reply-audience.spec.ts tests/private-image-reading.spec.ts",
+    "test:e2e:ui": "playwright test tests/ui.spec.ts tests/product.spec.ts tests/interface-quality.spec.ts tests/form-feedback.spec.ts tests/reading-controls.spec.ts tests/image-authoring.spec.ts tests/relationships.spec.ts tests/history.spec.ts tests/relationship-history.spec.ts tests/reply-audience.spec.ts tests/private-image-reading.spec.ts",
     "format": "prettier --write src tests *.ts *.json index.html",
     "format:check": "prettier --check src tests *.ts *.json index.html",
     "c2s:follow:build": "python3 scripts/c2s-follow-fixture.py build",
