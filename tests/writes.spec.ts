@@ -136,7 +136,7 @@ test('a like shows at once, the re-read runs in the background, and a second lik
   const like = first.getByRole('button', { name: /^좋아요/ });
   await like.click();
   // The server answered 201 at once; the button flips with it, not with the re-read.
-  const liked = first.getByRole('button', { name: /^좋아함/ });
+  const liked = first.getByRole('button', { name: /^좋아요 취소/ });
   await expect(liked).toHaveAttribute('aria-pressed', 'true', { timeout: 300 });
   await expect(page.getByRole('status')).toHaveText('좋아요를 남겼어요.');
   // The re-read is in flight and says so quietly on the refresh control alone.
@@ -147,7 +147,7 @@ test('a like shows at once, the re-read runs in the background, and a second lik
   await expect(page.locator('.note-actions button:disabled')).toHaveCount(0);
   // A second like on another card during that window goes through without waiting.
   await second.getByRole('button', { name: /^좋아요/ }).click();
-  await expect(second.getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+  await expect(second.getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
     'aria-pressed',
     'true',
     { timeout: 300 },
@@ -155,11 +155,11 @@ test('a like shows at once, the re-read runs in the background, and a second lik
   await expect.poll(() => server.likes.length).toBe(2);
   // Once the newest re-read lands, both likes come back from the server itself.
   await expect(refresh).not.toHaveAttribute('aria-busy', 'true', { timeout: 6000 });
-  await expect(first.getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+  await expect(first.getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(second.getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+  await expect(second.getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -220,11 +220,11 @@ test('two likes 20 ms apart both go out, in order, and disable no action button 
   await first.getByRole('button', { name: /^좋아요/ }).click();
   await page.waitForTimeout(20);
   await second.getByRole('button', { name: /^좋아요/ }).click();
-  await expect(first.getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+  await expect(first.getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
-  await expect(second.getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+  await expect(second.getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   );
@@ -258,7 +258,7 @@ test('a failed re-read after a like shows one message, not a confirmation beside
   await expect(alert).toContainText('좋아요는 남겼지만');
   await expect(page.getByRole('status')).toHaveText('');
   // The button keeps what the server accepted, and nothing else on the page waits.
-  await expect(card(page, 'one').getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+  await expect(card(page, 'one').getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   );

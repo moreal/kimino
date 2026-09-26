@@ -117,12 +117,12 @@ test.describe('preview mode after round 4', () => {
     await like.click();
     await expect(page.getByRole('alert')).toContainText('계정을 연결');
     const liked = page.locator('.note-card').filter({ hasText: '저도요.' });
-    // A reaction in effect renames itself (좋아요 → 좋아함), so the state is not only a colour.
-    await expect(liked.getByRole('button', { name: /^좋아함/ })).toHaveAttribute(
+    // A reaction in effect renames itself (좋아요 → 좋아요 취소), so the state is not only a colour.
+    await expect(liked.getByRole('button', { name: /^좋아요 취소/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    await expect(liked.getByRole('button', { name: '좋아함 1' })).toBeVisible();
+    await expect(liked.getByRole('button', { name: '좋아요 취소 1' })).toBeVisible();
     await liked.getByRole('button', { name: /^공유/ }).click();
     await expect(liked.getByRole('alert')).toContainText('계정을 연결');
     // Feedback stays with the note that was tapped instead of a page-wide banner.

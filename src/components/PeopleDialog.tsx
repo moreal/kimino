@@ -14,6 +14,7 @@ import { relationshipCopy as copy } from '../presentation/copy-relationships';
 import { restoreFocus } from './shortcuts';
 import RelationshipControl from './RelationshipControl';
 import Icon from './Icons';
+import './PeopleDialog.css';
 
 export default function PeopleDialog(props: {
   open: boolean;

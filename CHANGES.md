@@ -9,6 +9,10 @@ To be released.
     labeled actions, touch targets, keyboard navigation, and focus handling.
     Contextual author and account sheets, inline writing feedback, and Korean
     interface copy keep account controls separate from reading and composing.
+ -  Add a component workbench with shared buttons, fields, theme palettes and
+    real post/composer states. Keep selected reactions visually quiet, preserve
+    the like label, clarify disabled buttons, and align form controls
+    consistently.
  -  Connect an ActivityPub C2S account to read its inbox and outbox, publish
     posts, and reply to conversations. A labeled read-only preview is available
     before connecting. Mastodon REST-only accounts are not supported.

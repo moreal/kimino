@@ -95,6 +95,11 @@ inbox는 서버 전체의 모든 Activity 로그가 아닙니다. 이 MVP는 현
 
 ## 개발과 검증
 
+공통 UI와 선택·비활성·오류 상태는 `npm run dev:design-system`으로 여는
+컴포넌트 갤러리에서 비교할 수 있습니다. 앱과 같은 컴포넌트·스타일을 사용하며,
+밝은/어두운 테마 전환과 상태 조작을 지원합니다. 구조와 사용법은
+[디자인 시스템 문서](docs/design-system.md)를 참고하세요.
+
 ```sh
 npm run check                   # 포맷, 타입, 단위 테스트, 빌드, changelog
 npx playwright install chromium

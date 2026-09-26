@@ -3,6 +3,8 @@ import { connectionCopy as text, copy, DEV_SERVER_URL } from '../presentation/co
 import FailureAlert from './FailureAlert';
 import { mediaCopy } from '../presentation/copy-media';
 import Icon from './Icons';
+import Button from './ui/Button';
+import { TextInput } from './ui/Field';
 
 /**
  * Landing: a read-only preview first, then a clearly separated connection form.
@@ -40,14 +42,15 @@ export default function ConnectionPanel(props: {
       <h1>{text.tagline}</h1>
       <p class="welcome-description">{text.taglineHelp}</p>
       <div class="welcome-preview">
-        <button
+        <Button
+          variant="primary"
           type="button"
-          class="primary-button explore-button"
+          class="explore-button"
           onClick={props.onExplore}
           disabled={props.busy}
         >
           {copy.exploreLabel} <Icon name="arrow-right" />
-        </button>
+        </Button>
         <p class="field-help">{text.previewHelp}</p>
       </div>
       <form
@@ -74,7 +77,7 @@ export default function ConnectionPanel(props: {
         </details>
         <label>
           <span id="actor-url-label">{text.actorUrlLabel}</span>
-          <input
+          <TextInput
             type="url"
             aria-labelledby="actor-url-label"
             aria-describedby="actor-url-help"
@@ -92,7 +95,7 @@ export default function ConnectionPanel(props: {
         </label>
         <label>
           {text.tokenLabel}
-          <input
+          <TextInput
             type="password"
             value={token()}
             onInput={(event) => setToken(event.currentTarget.value)}
@@ -135,9 +138,9 @@ export default function ConnectionPanel(props: {
           />
         </Show>
         <div class="connection-actions">
-          <button class="primary-button" disabled={props.busy} type="submit">
+          <Button variant="primary" disabled={props.busy} type="submit">
             {props.busy ? text.connecting : text.connect} <Icon name="arrow-right" />
-          </button>
+          </Button>
         </div>
       </form>
       <details class="setup-help preview-privacy">

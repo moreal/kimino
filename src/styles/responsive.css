@@ -1,0 +1,481 @@
+/* ===========================================================================
+   Responsive and container steps
+   Hover, reduced motion, the viewport breakpoints (design-tokens.ts BREAKPOINTS:
+   wide 1100, gutter 1280, phone 650), then the container steps, last of all.
+=========================================================================== */
+/* Hover (pointer devices only) */
+@media (hover: hover) {
+  .nav-item:hover {
+    background: var(--surface-2);
+  }
+  .nav-item.active:hover {
+    background: var(--accent-soft);
+  }
+  .reaction-button[aria-pressed='true']:hover:not(:disabled),
+  .save-button[aria-pressed='true']:hover:not(:disabled) {
+    background: var(--surface-2);
+    color: var(--accent);
+  }
+  .author:hover,
+  .timestamp:hover,
+  .reply-context--button:hover,
+  .back-button:hover {
+    text-decoration: underline;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-avatar::after,
+  .skeleton-line::after,
+  .toast,
+  .toast-dismiss,
+  .to-top,
+  .icon--spin {
+    animation: none;
+  }
+  * {
+    transition-duration: 0ms !important;
+  }
+}
+
+/* Responsive */
+@media (max-width: 1099px) {
+  .app-shell {
+    grid-template-columns: 184px minmax(0, 640px);
+    max-width: 900px;
+    gap: var(--s-5);
+  }
+  .context-column {
+    display: none;
+  }
+  .nav-item.sidebar-disconnect {
+    display: flex;
+  }
+  /* A real account disconnects from its sheet, opened from the header. */
+  .sidebar--account .sidebar-disconnect {
+    display: none;
+  }
+  .icon-button.account-button {
+    display: inline-flex;
+  }
+}
+@media (max-width: 650px) {
+  :root {
+    --space-page: var(--s-4);
+    --avatar: 36px;
+  }
+  .app-shell {
+    display: block;
+    padding: 0;
+  }
+  /* Before connecting the sidebar is a brand row; connected, its nav is a bottom tab bar. */
+  .sidebar {
+    position: static;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-3);
+    padding: var(--s-3) var(--s-4);
+    background: var(--ground);
+    border-bottom: 1px solid var(--line);
+  }
+  .sidebar--connected {
+    padding: 0;
+    border: 0;
+  }
+  .sidebar--connected .brand {
+    display: none;
+  }
+  .header-wordmark {
+    display: inline;
+  }
+  .brand {
+    flex: 1;
+    font-size: var(--t-xl);
+    line-height: var(--lh-xl);
+    letter-spacing: -0.8px;
+  }
+  .brand-mark {
+    width: 30px;
+    height: 32px;
+    font-size: var(--t-xl);
+    line-height: var(--lh-xl);
+    border-radius: var(--r-md) var(--r-md) var(--r-md) var(--r-sm);
+  }
+  .brand-caption,
+  .sidebar-bottom {
+    display: none;
+  }
+  .main-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-tab-bar);
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0;
+    margin: 0;
+    padding: 0 var(--s-1) env(safe-area-inset-bottom);
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+  }
+  .nav-item,
+  .nav-item.sidebar-disconnect,
+  .sidebar-compose {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--s-1);
+    min-height: 56px;
+    margin: 0;
+    padding: var(--s-1);
+    border-radius: 0;
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+    font-weight: 600;
+    white-space: nowrap;
+    text-align: center;
+    color: var(--ink-muted);
+  }
+  .sidebar--account .sidebar-disconnect {
+    display: none;
+  }
+  /* The fifth tab writes: the same shape as the four list tabs, word under icon. */
+  .sidebar-compose {
+    flex-direction: column-reverse;
+    background: none;
+    border: 0;
+    color: var(--accent);
+  }
+  .nav-item.active {
+    background: none;
+    box-shadow: inset 0 2px 0 var(--accent);
+    color: var(--accent);
+  }
+  .main-column {
+    border: 0;
+    min-height: calc(100dvh - 56px);
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+  .page-header {
+    min-height: 48px;
+    padding-inline: var(--s-3) var(--s-1);
+  }
+  .page-header h1 {
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+  }
+  .page-title {
+    flex: 1;
+  }
+  /* Search collapses to its icon; the label keeps a 44px target and expands on focus. */
+  .search-field {
+    flex: 0 0 auto;
+    width: var(--tap);
+    height: var(--tap);
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+    color: var(--ink-2);
+  }
+  .search-field input {
+    width: 0;
+    padding: 0;
+    opacity: 0;
+  }
+  .search-field .search-label {
+    min-width: var(--tap);
+    justify-content: center;
+  }
+  .search-field:focus-within .search-label,
+  .search-field:has(input:not(:placeholder-shown)) .search-label {
+    min-width: 0;
+  }
+  .search-field:focus-within,
+  .search-field:has(input:not(:placeholder-shown)) {
+    flex: 1 1 auto;
+    width: auto;
+    padding: 0 var(--s-3);
+    justify-content: flex-start;
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+  .search-field:focus-within input,
+  .search-field:has(input:not(:placeholder-shown)) input {
+    width: 100%;
+    padding: var(--s-2) 0;
+    opacity: 1;
+  }
+  .page-header:has(.search-field:focus-within) .page-title,
+  .page-header:has(.search-field input:not(:placeholder-shown)) .page-title {
+    display: none;
+  }
+  .character-count:not(.character-count--over) {
+    display: none;
+  }
+  .note-card {
+    gap: var(--s-3);
+  }
+  .note-actions .count {
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+  }
+  /* Keep an opened form and its writing position clear of the fixed tab bar. */
+  .composer,
+  .compose-input textarea,
+  .image-picker-alt textarea {
+    scroll-margin-bottom: calc(56px + var(--s-3) + env(safe-area-inset-bottom));
+  }
+  /* 16px keeps iOS from zooming the page when the field takes focus. */
+  .compose-input textarea,
+  .compose-warning input,
+  .search-field input {
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+  }
+  .compose-account {
+    display: block;
+    margin: 0 0 var(--s-2);
+    color: var(--ink-muted);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    overflow-wrap: anywhere;
+  }
+  .thread-reply .note-card {
+    padding-left: calc(var(--space-page) + var(--s-2));
+  }
+  .thread-reply .inline-reply .composer {
+    padding-left: calc(var(--space-page) + var(--s-2) - 3px);
+  }
+  .sidebar-shortcuts {
+    display: none;
+  }
+  .app-shell--landing .sidebar {
+    padding: var(--s-3) var(--s-4);
+  }
+  .connection-panel {
+    padding: var(--s-5) var(--s-4) var(--s-5);
+  }
+  .connection-panel h1 {
+    font-size: var(--t-xl);
+    line-height: var(--lh-xl);
+  }
+  .app-shell--landing .main-column {
+    border: 0;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 650px) {
+  .main-column .session-hint {
+    align-items: center;
+    min-height: 36px;
+    padding-block: 0;
+  }
+  .main-column .session-hint .icon {
+    margin-top: 0;
+  }
+  .main-column .session-hint p {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .main-column .session-hint--open {
+    align-items: flex-start;
+    padding-block: var(--s-2);
+  }
+  .main-column .session-hint--open p {
+    white-space: normal;
+  }
+  .main-column .session-hint-more {
+    display: inline-flex;
+    flex: 0 0 auto;
+    min-height: 36px;
+    padding-inline: var(--s-2);
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+  }
+  .main-column .session-hint-dismiss {
+    margin-block: calc(var(--s-1) * -1);
+  }
+}
+/* Phones: two indents at most, then the cue. */
+@media (max-width: 650px) {
+  .thread-reply {
+    --indent: var(--s-4);
+    --indents: min(var(--depth, 0), 2);
+  }
+  .thread-reply[data-depth='3'] .reply-cue {
+    display: block;
+  }
+  .thread-reply[data-depth='3'] .note-card {
+    padding-top: var(--s-2);
+  }
+}
+@media (max-width: 650px) {
+  .compose-options .warning-toggle {
+    justify-content: flex-start;
+  }
+}
+/* --- end note body --- */
+
+/* Touch targets: on a phone (and on any coarse pointer) the two controls that used to be text-height - the author's name and the "원글 보기" cue - reach 44px through padding, so the card keeps its shape and the thumb still lands. */
+@media (max-width: 650px), (pointer: coarse) {
+  .author {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    padding-block: var(--s-2);
+  }
+  button.author {
+    min-height: var(--tap);
+    min-width: var(--tap);
+    justify-content: flex-start;
+  }
+  .reply-context--button,
+  a.reply-context {
+    min-height: var(--tap);
+    padding-block: var(--s-2);
+  }
+}
+
+/* On a phone the tab bar owns the bottom edge: the control sits above it, never on 새 글 쓰기,
+   and the toast stands one slot higher so the two never meet. */
+@media (max-width: 650px) {
+  .app-shell:has(.composer:focus-within) .to-top {
+    visibility: hidden;
+  }
+  .to-top {
+    right: 0;
+    left: 0;
+    width: fit-content;
+    margin-inline: auto;
+    bottom: calc(56px + var(--s-3) + env(safe-area-inset-bottom));
+  }
+  /* The toast is a full-width strip directly above the tab bar for its three seconds, never
+     on the bar itself: a tap at 답글 in the bar reaches the bar, not the toast. Every tap
+     passes through it (there is no close control on a phone; it clears by itself), and the
+     맨 위로 control steps up over it while it stands. */
+  .toast-region:has(.toast) {
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    z-index: var(--z-toast-phone);
+    padding: 0;
+    pointer-events: none;
+  }
+  .toast {
+    flex: 1 1 auto;
+    max-width: none;
+    min-height: 56px;
+    border-width: 1px 0 0;
+    border-radius: 0;
+    box-shadow: none;
+    pointer-events: none;
+    animation: none;
+  }
+  .toast-dismiss {
+    display: none;
+  }
+  .app-shell:has(.toast) .to-top {
+    bottom: calc(56px + 56px + var(--s-3) + env(safe-area-inset-bottom));
+  }
+}
+
+/* Container steps: how wide the card or the column is, not how wide the window is. Last in the file because a container query carries no specificity of its own, so it has to come after every rule it narrows. The steps are named in presentation/design-tokens.ts (`CONTAINER_STEPS`) and design-system.test.ts holds the two files to the same numbers: card.fold     511  my own row folds 수정/삭제 behind 관리; panel density; wrap allowed card.counted  419  a counted 공유/좋아요/대화 keeps its number and folds its word card.tight    387  smallest type step and the small icons card.saveFold 349  저장 folds into the 관리 row too card.icons    299  someone else's 공유, 좋아요, 저장 fold to their icons column.picker 419  the visibility picker folds to 2x2 A container query measures the content box, so a card step is the old column width less the card's horizontal padding (48px in a desktop column, 32px on a phone or in the panel): a reply three deep in the 460px panel is a 388px card, a phone card two deep is 358px. */
+/* Under 512px - the reading column of an 1100 to 1280 window, the thread panel, a phone -
+   seven controls with their words no longer share a line. My own row folds 수정 and 삭제
+   behind 관리 (`aria-expanded` on the control, `data-open` on the group) and takes the
+   panel's density: one type step down, the tightest padding, no gap. Should a row still
+   not fit, it wraps rather than scrolling sideways, so every control keeps its target. */
+@container card (max-width: 511px) {
+  .note-actions {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    overflow-x: visible;
+    gap: var(--s-1) 0;
+    margin-left: calc(var(--s-1) * -1);
+  }
+  .note-actions .text-button {
+    /* Leave a little font-metric headroom: Korean system fonts are wider on Linux than
+       the macOS stack, while the inherited min-width still keeps every target at --tap. */
+    padding-inline: 0;
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+  }
+  .manage-toggle {
+    display: inline-flex;
+  }
+  .manage-group:not([data-open]) {
+    display: none;
+  }
+  /* Opened, the group is a row of its own under the six, on the surface the open 관리
+     control already carries: the reading actions never reflow when it opens, whatever the
+     card's width, and the destructive control is still the last thing in it. */
+  .note-manage-row[data-open] {
+    display: flex;
+    flex: 1 0 100%;
+    align-items: center;
+    gap: inherit;
+    margin-top: var(--s-1);
+    padding-inline: var(--s-1);
+    border-radius: var(--r-sm);
+    background: var(--surface-2);
+  }
+}
+/* Under 420px - the 1100 reading column (a 356px row), every panel card - a share or
+   대화 that carries a count keeps its icon and the number and folds its word (the accessible
+   name keeps it): six of my own with two-digit counts then share one line. */
+@container card (max-width: 419px) {
+  .note-actions :is(.share-button, .thread-button)[data-count] {
+    --action-word: folded;
+    min-width: var(--tap);
+    justify-content: center;
+  }
+}
+/* Under 420px the visibility picker folds from four cells to an even 2x2. */
+@container column (max-width: 419px) {
+  .visibility-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+/* Under 388px - a phone, a panel reply two deep - the row goes to the smallest type step
+   and the small icons; each control still spans the target size both ways. */
+@container card (max-width: 387px) {
+  .note-actions .text-button {
+    gap: var(--s-1);
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+  }
+  .note-actions .icon {
+    width: var(--icon-sm);
+    height: var(--icon-sm);
+    stroke-width: 2;
+  }
+}
+/* Narrower still - a phone reply one level deep (334px), a panel card three deep - the six
+   of my own row no longer share a line with their words (315px on a 298px row): 저장 folds
+   into the 관리 row, where the group's own copy of it is drawn instead, so five stay on
+   one line and the sixth is one tap away with 수정 and 삭제. */
+@container card (max-width: 349px) {
+  .note-actions:has(.save-button--folded) > .save-button:not(.save-button--folded) {
+    display: none;
+  }
+  .save-button--folded {
+    display: inline-flex;
+  }
+}
+/* Under 300px - the desktop panel at its narrowest, one reply deep - someone else's five
+   no longer fit with every word (262px on a 254px row): 공유, 좋아요 and 저장 keep their
+   icons and fold their words, as a counted reaction does; the names keep them. 답글 and
+   대화 keep theirs, so the row still says what it opens. A phone never gets here: its
+   deepest card (318px) holds the five words. */
+@container card (max-width: 299px) {
+  .note-actions:not(:has(.manage-toggle)) :is(.reaction-button, .save-button) {
+    --action-word: folded;
+    min-width: var(--tap);
+    justify-content: center;
+  }
+}

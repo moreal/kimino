@@ -172,7 +172,7 @@ export const copy = {
    */
   reactions: {
     like: '좋아요',
-    liked: '좋아함',
+    liked: '좋아요 취소',
     share: '공유',
     shared: '공유함',
     save: '저장',

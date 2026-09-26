@@ -12,6 +12,7 @@ import Icon from './Icons';
 import { useClock } from '../presentation/solid/clock';
 import NoteActions from './NoteActions';
 import NoteBody from './NoteBody';
+import './NoteCard.css';
 
 export default function NoteCard(props: {
   note: TimelineNote;

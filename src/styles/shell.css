@@ -1,0 +1,983 @@
+/* ===========================================================================
+   Layout
+   The shell and its columns, the sidebar, the page header, the right column, the
+   connect screen, the header search, the dialogs.
+=========================================================================== */
+/* Layout */
+.app-shell {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 620px) minmax(280px, 360px);
+  gap: var(--s-5);
+  max-width: 1280px;
+  margin: auto;
+  padding: 0 var(--s-5);
+  min-height: 100vh;
+}
+/* Every column that can hold note cards is a query container, so the timeline and the
+   thread column decide on the visibility grid by their own width, not by the viewport.
+   Each card is a container of its own (`card`, below) so its action row folds by the width
+   the card actually has - a nested reply is narrower than its column by its indent. */
+.main-column,
+.context-column {
+  container-type: inline-size;
+  container-name: column;
+}
+.main-column {
+  background: var(--surface);
+  min-width: 0;
+  min-height: 100vh;
+  border-inline: 1px solid var(--line);
+}
+/* Landing: a single centred column at every width - the brand row, the form (560px at
+   most, so no line breaks mid-word and no placeholder is cut off), then the compatibility
+   note directly under it. The class is doubled so the wide-layout column rule cannot
+   reclaim it. */
+.app-shell.app-shell--landing {
+  grid-template-columns: minmax(0, 560px);
+  justify-content: center;
+  align-content: start;
+  max-width: 100%;
+}
+.app-shell--landing .sidebar {
+  grid-column: 1 / -1;
+  position: static;
+  height: auto;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-5) 0 0;
+}
+.app-shell--landing .brand-caption {
+  margin: 0;
+}
+.app-shell--landing .sidebar-bottom {
+  margin: 0 0 0 auto;
+}
+.app-shell--landing .main-column {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.app-shell--landing .landing-aside {
+  display: block;
+  position: static;
+  max-height: none;
+  overflow: visible;
+  padding: var(--s-4) 0 var(--s-6);
+}
+
+/* Sidebar */
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: var(--s-6) 0 var(--s-5);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  font-size: var(--t-xl);
+  font-weight: 600;
+  letter-spacing: -1.2px;
+  line-height: var(--lh-xl);
+}
+.brand-mark {
+  background: var(--accent);
+  color: var(--accent-ink);
+  width: 36px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-md) var(--r-md) var(--r-md) var(--r-sm);
+  font-family: Georgia, serif;
+  font-size: var(--t-xl);
+  line-height: var(--lh-xl);
+  letter-spacing: -4px;
+  padding-right: var(--s-1);
+  margin-right: var(--s-2);
+}
+/* The dot beside the mark is drawn, not typed: no glyph stands in for a shape. */
+.brand-mark::after {
+  content: '';
+  align-self: flex-start;
+  width: var(--s-1);
+  height: var(--s-1);
+  margin-top: var(--s-2);
+  border-radius: 50%;
+  background: var(--accent-soft);
+}
+.brand-period {
+  color: var(--accent);
+}
+.brand-caption {
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  margin: var(--s-2) 0 0 calc(var(--s-6) + var(--s-4));
+}
+.main-nav {
+  display: grid;
+  gap: var(--s-1);
+  margin-top: calc(var(--s-6) + var(--s-2));
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  text-align: left;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  font-weight: 600;
+  color: var(--accent);
+}
+.nav-item > .nav-icon {
+  color: var(--ink-muted);
+}
+.nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.nav-item.active > .nav-icon {
+  color: var(--accent);
+}
+.sidebar-compose {
+  margin-top: var(--s-4);
+}
+/* The header's account control: only where the right column (and its account line) is not. */
+.icon-button.account-button {
+  display: none;
+  color: var(--ink-2);
+}
+.nav-item.sidebar-disconnect {
+  display: none;
+  margin-top: var(--s-3);
+  color: var(--ink-muted);
+}
+.sidebar-shortcuts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-radius: var(--r-md);
+}
+/* Two browser settings under the navigation, drawn as switches: a track with a knob that
+   moves to the far end when on. Nothing here is filled like the current list above, so an
+   "on" setting is never mistaken for a place in the app. The whole row is the target. */
+.sidebar-switch {
+  display: none;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-1);
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-radius: var(--r-md);
+  text-align: left;
+}
+.sidebar-switch:hover {
+  color: var(--ink);
+}
+.switch-label {
+  flex: 1 1 auto;
+}
+.switch-track {
+  flex: 0 0 auto;
+  position: relative;
+  width: var(--s-6);
+  height: var(--s-4);
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  transition: background 120ms ease-out;
+}
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: var(--s-3);
+  height: var(--s-3);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: transform 120ms ease-out;
+}
+.sidebar-switch[aria-checked='true'] {
+  color: var(--ink);
+}
+.sidebar-switch[aria-checked='true'] .switch-track {
+  background: var(--accent);
+}
+.sidebar-switch[aria-checked='true'] .switch-knob {
+  transform: translateX(var(--s-4));
+}
+.sidebar-bottom {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.connection-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+}
+/* Beside 연결 중…: nothing has connected yet, so nothing is lit. */
+.connection-dot--pending {
+  background: var(--ink-muted);
+}
+
+/* Page header: one 52px row (view name, inline search, refresh) so the first post starts high. */
+.page-header {
+  min-height: 52px;
+  padding: var(--s-1) var(--space-page) var(--s-1) var(--space-page);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.eyebrow {
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  letter-spacing: 0.6px;
+}
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.header-wordmark {
+  display: none;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  color: var(--accent);
+}
+.header-wordmark::after {
+  content: '·';
+  margin-left: var(--s-2);
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.page-header h1 {
+  font-size: var(--t-lg);
+  letter-spacing: -0.3px;
+  margin: 0;
+  line-height: var(--lh-lg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-1);
+  flex: 1;
+  min-width: 0;
+}
+.demo-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-height: 32px;
+  overflow: visible;
+  margin: var(--s-2) var(--space-page) 0;
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-3);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.demo-pill > span {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+}
+.demo-pill-action {
+  min-height: var(--tap);
+  min-width: var(--tap);
+  /* The 44px target overhangs the 32px line by 6px on each side instead of thickening it. */
+  margin: calc((var(--tap) - var(--s-6)) / -2) 0;
+  gap: var(--s-1);
+  padding: var(--s-2) var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border-radius: var(--r-sm);
+  white-space: nowrap;
+}
+
+/* Author filter chip: a status line above the list, with its own clear control. */
+.filter-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: var(--s-2) var(--space-page) 0;
+  padding: 0 var(--s-1) 0 var(--s-3);
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.filter-chip > .icon {
+  color: var(--ink-muted);
+}
+.filter-chip > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.filter-chip-clear {
+  width: 32px;
+  height: 32px;
+}
+
+/* Context column: sticks beside the timeline and scrolls on its own when a thread is long. */
+.context-column {
+  position: sticky;
+  top: 0;
+  max-height: 100dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-top: var(--s-5);
+  padding-bottom: var(--s-5);
+  --space-page: var(--s-4);
+  --avatar: 32px;
+}
+/* One line: who is connected (sync state as a tooltip) and the single exit control. */
+.context-account {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-1) 0 var(--s-3);
+  margin-bottom: var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.context-identity {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.context-handle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+/* The address under the name, quieter: what tells this account from a namesake. */
+.context-address {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-muted);
+}
+.context-disconnect {
+  width: var(--tap);
+  height: var(--tap);
+  color: var(--ink-muted);
+}
+.context-account + .thread-panel {
+  margin-top: 0;
+}
+/* Replies addressed to me, one line each, while no conversation is open; no card around
+   them, and when there are none, one muted line and nothing else. */
+.replies-peek {
+  padding: 0 var(--s-3);
+}
+.replies-peek-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--t-body) !important;
+  line-height: var(--lh-body) !important;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin: 0 0 var(--s-2) !important;
+}
+.replies-peek-heading .icon {
+  color: var(--ink-muted);
+}
+.replies-peek-empty {
+  margin: 0;
+  border: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.peek-item {
+  display: grid;
+  gap: var(--s-1);
+  width: 100%;
+  text-align: left;
+  padding: var(--s-2) var(--s-2);
+  margin: 0 calc(var(--s-2) * -1);
+  width: calc(100% + var(--s-4));
+  border-radius: var(--r-md);
+  border-top: 1px solid var(--line);
+  min-height: var(--tap);
+}
+.peek-item:first-of-type {
+  border-top: 0;
+}
+.peek-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-muted);
+}
+.peek-meta strong {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.peek-text {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* The conversation in the right column: framed like a card, cards inside stay compact. */
+.thread-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.thread-panel .note-card--focused .note-content {
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+}
+.thread-panel .conversation-heading {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink-2);
+}
+.thread-panel .conversation-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-right: var(--space-page);
+}
+.conversation-heading:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-4);
+  margin: var(--s-5) var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  letter-spacing: 0.6px;
+}
+
+/* Focus on the panel's heading, after a thread opens: a heading, not a button. An underline
+   in the accent says where focus went without dressing the word as a control. */
+.thread-panel .conversation-heading:focus-visible {
+  outline: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: var(--s-1);
+}
+/* Connection panel (landing) */
+.connection-panel {
+  padding: var(--s-6) var(--s-6) var(--s-6);
+}
+.connection-panel h1 {
+  word-break: keep-all;
+  font-size: var(--t-xl);
+  font-weight: 600;
+  line-height: var(--lh-xl);
+  letter-spacing: -0.8px;
+  margin: 0 0 var(--s-2);
+}
+.welcome-description {
+  color: var(--ink-muted);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  margin: 0 0 var(--s-5);
+}
+.welcome-preview {
+  display: grid;
+  gap: var(--s-2);
+  padding-bottom: var(--s-5);
+  margin-bottom: var(--s-5);
+  border-bottom: 1px solid var(--line);
+}
+.welcome-preview .field-help {
+  margin: 0;
+}
+.welcome-preview .explore-button {
+  justify-self: start;
+  color: var(--accent-ink);
+}
+.connection-heading {
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  font-weight: 600;
+  margin: 0;
+}
+.connection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+.connection-actions .primary-button {
+  flex: 1 1 160px;
+}
+.explore-button {
+  gap: var(--s-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.field-help {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  margin: var(--s-2) 0 0;
+}
+/* Directly under the Actor URL field: the one-line version of the compatibility note. */
+.field-help--inline {
+  margin: 0;
+  font-weight: 400;
+}
+.compatibility-note {
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.compatibility-note p {
+  margin: var(--s-1) 0 0;
+  color: var(--ink-2);
+}
+.compatibility-note a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+.remember-field {
+  display: grid;
+  gap: var(--s-1);
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 500;
+  cursor: pointer;
+}
+.checkbox-label input {
+  width: var(--icon);
+  height: var(--icon);
+  margin: 0;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.remember-field .field-help {
+  margin: 0;
+}
+/* One tappable row: the box on the left, wrapping text on the right (overrides the form's
+   grid label and full-width input rules that follow). */
+.connection-form .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  min-height: var(--tap);
+  padding: var(--s-2) 0;
+  font-size: var(--t-body);
+  font-weight: 500;
+  line-height: var(--lh-body);
+}
+.connection-form .checkbox-label input {
+  width: var(--icon);
+  height: var(--icon);
+  min-height: 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+.connection-form .checkbox-label span {
+  flex: 1;
+  min-width: 0;
+}
+.connection-form {
+  display: grid;
+  gap: var(--s-3);
+  margin-top: 0;
+}
+.connection-form label {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+}
+.connection-form input {
+  width: 100%;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  font-weight: 400;
+  color: var(--ink);
+  background: var(--surface);
+}
+.connection-form input::placeholder {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-muted);
+}
+.setup-help {
+  margin-top: var(--s-5);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+}
+.setup-help + .setup-help {
+  margin-top: var(--s-1);
+}
+.setup-help p {
+  margin: var(--s-2) 0 0;
+}
+.setup-help summary {
+  cursor: pointer;
+  min-height: var(--tap);
+  padding: var(--s-3) 0;
+  font-weight: 600;
+}
+.setup-help summary:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+.setup-help ol {
+  padding-left: var(--s-5);
+}
+.setup-help li {
+  margin: var(--s-2) 0;
+}
+.setup-help code {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+}
+.setup-help a {
+  text-decoration: underline;
+}
+
+/* Search (inline in the header; collapses to its icon on small screens) */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  padding: 0 var(--s-3);
+  flex: 0 1 240px;
+  min-width: 0;
+  min-height: 40px;
+  color: var(--ink-muted);
+}
+.search-field:focus-within {
+  border-color: var(--accent);
+}
+.search-field input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  min-height: 38px;
+  padding: var(--s-2) 0;
+  width: 100%;
+  min-width: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+}
+/* The icon and its hidden label: a tap on the icon puts the caret in the field. */
+.search-label {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  color: inherit;
+  cursor: text;
+}
+/* One clear control, drawn by the app whenever the field has a query (the browser's own
+   only shows on hover), at the end of the pill and at the page's target size. */
+.search-clear {
+  flex: 0 0 auto;
+  margin-right: calc(var(--s-2) * -1);
+}
+.search-field input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-field input::placeholder {
+  color: var(--ink-muted);
+}
+
+/* Shortcuts dialog */
+.shortcuts-dialog::backdrop {
+  background: var(--scrim);
+}
+.shortcuts-dialog {
+  width: min(420px, 100%);
+  max-height: calc(100dvh - var(--s-6));
+  overflow: auto;
+  padding: var(--s-4) var(--s-5) var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.shortcuts-header h2 {
+  margin: 0;
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+}
+.shortcuts-hint {
+  margin: var(--s-1) 0 var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.shortcuts-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+}
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  align-items: center;
+  gap: var(--s-3);
+}
+.shortcut-row dt {
+  display: flex;
+  gap: var(--s-1);
+}
+.shortcut-row dd {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+}
+
+/* Local reading controls: one reversible setting, with a native modal for recovery. */
+.reading-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--space-page);
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-muted);
+  background: var(--surface-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.reading-filter .text-button {
+  min-height: var(--tap);
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.reading-dialog {
+  width: min(480px, calc(100% - var(--s-6)));
+  max-height: calc(100dvh - var(--s-6));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+.reading-dialog::backdrop {
+  background: var(--scrim);
+}
+.reading-dialog-body {
+  padding: var(--s-5);
+}
+.reading-scope {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.actor-reading-control {
+  margin-top: var(--s-5);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+.hidden-authors-list {
+  list-style: none;
+  margin: var(--s-5) 0 0;
+  padding: 0;
+}
+.hidden-authors-list li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--line);
+}
+.hidden-author-identity {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+.hidden-author-identity > span {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.reading-empty {
+  padding-block: var(--s-5);
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+/* Actor sheet: the shortcuts dialog frame with a few facts and two actions. */
+.actor-sheet-title {
+  min-width: 0;
+}
+.actor-sheet-title h2 {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+  overflow-wrap: anywhere;
+}
+.actor-handle {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.actor-facts {
+  display: grid;
+  gap: var(--s-3);
+  margin: var(--s-4) 0 0;
+  padding: var(--s-3) 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.actor-facts dt {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.actor-facts dd {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.actor-facts-scope {
+  font-size: var(--t-sm) !important;
+  line-height: var(--lh-sm) !important;
+  color: var(--ink-muted) !important;
+}
+.actor-sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  margin-top: var(--s-4);
+}
+.actor-sheet-actions .secondary-button {
+  gap: var(--s-2);
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+.actor-sheet-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

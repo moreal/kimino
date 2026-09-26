@@ -1288,17 +1288,15 @@ test.describe('round 8: the counter, the words on the buttons and the toast', ()
       .locator('.like-button');
     await expect(liked).toHaveAttribute('aria-pressed', 'true');
     await expect(plain).toHaveAttribute('aria-pressed', 'false');
-    // The word itself changes: readable in greyscale, and read out by a screen reader.
-    await expect(liked.locator('.action-label')).toHaveText('좋아함');
+    await expect(liked.locator('.action-label')).toHaveText('좋아요');
     await expect(plain.locator('.action-label')).toHaveText('좋아요');
-    await expect(liked).toHaveAccessibleName('좋아함 1');
-    // The heart fills in and the control takes an outline the unpressed one does not have.
+    await expect(liked).toHaveAccessibleName('좋아요 취소 1');
     expect(await liked.locator('svg').getAttribute('fill')).toBe('currentColor');
     expect(await plain.locator('svg').getAttribute('fill')).toBe('none');
     const outline = (element: import('@playwright/test').Locator) =>
       element.evaluate((el) => getComputedStyle(el).boxShadow);
-    expect(await outline(liked)).not.toBe(await outline(plain));
-    expect(await outline(liked)).not.toBe('none');
+    expect(await outline(liked)).toBe(await outline(plain));
+    expect(await outline(liked)).toBe('none');
   });
 
   test('the toast never lands on the first card or an open composer at 390 or 823x514', async ({
@@ -2743,7 +2741,7 @@ test.describe('round 13: names, Escape, the phone bar, the quiet foot and the hi
     });
   }
 
-  test('삭제 is neutral at rest and red only when pointed at, and a pressed pill weighs no more than its neighbours', async ({
+  test('삭제 is neutral at rest and red only when pointed at, and selected actions keep a quiet surface', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -2794,10 +2792,10 @@ test.describe('round 13: names, Escape, the phone bar, the quiet foot and the hi
       expect(pressed.size).toBe(save.size);
       expect(pressed.weight).toBe(save.weight);
     }
-    // The state is still carried by more than hue: the outline stays.
     expect(
       await card.locator('.like-button').evaluate((el) => getComputedStyle(el).boxShadow),
-    ).not.toBe('none');
+    ).toBe('none');
+    await expect(card.locator('.like-button svg')).toHaveAttribute('fill', 'currentColor');
   });
 
   test('the desktop right column is quiet until a reply arrives', async ({ page }) => {
@@ -3870,9 +3868,8 @@ test.describe('round 16: threads that read, one cursor, switches, the phone band
       expect(box.height).toBeGreaterThanOrEqual(44);
       expect(box.right).toBeLessThanOrEqual(390);
     }
-    // The counted reactions keep their icon and number and fold the word; the name keeps it.
     await expect(like.locator('.count')).toHaveText('12');
-    await expect(like.locator('.action-label')).not.toBeInViewport();
+    await expect(like.locator('.action-label')).toBeInViewport();
     await expect(share.locator('.count')).toHaveText('12');
     // 대화 with a count folds its word too (round 18); the name keeps it.
     await expect(row.getByRole('button', { name: '대화 12' }).locator('.count')).toHaveText('12');

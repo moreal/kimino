@@ -2561,3 +2561,38 @@ composition, failed drafts, image receipts and audience constraints. Final
 `git diff --check` passed. No outstanding P1/P2 finding in reviewed flows;
 optional P3 and real-device verification limits remain explicitly recorded above.
 No commits, pushes or deployments were made.
+
+## Component library and visual workbench — 2026-09-26
+
+The user's selected-like screenshot exposed a gap in the previous visual review:
+tokens alone had not prevented an oversized selected-action capsule. The new
+internal library owns native buttons and fields, shared palettes and foundations;
+feature styles live beside components, and app.css only orders imports. The
+workbench renders the same NoteCard and Composer as the app, not mock lookalikes.
+
+Independent agent review is simulated feedback, not real-user research. The first
+pass identified missing real error-state coverage, inconsistent button icon gaps,
+a lost mobile like label, and insufficient keyboard-focus evidence. Code review
+also found the visible like label absent from its selected accessible name. These
+were corrected; inspecting actual focused cards then exposed a clipped outline,
+fixed by containing the action focus ring inside the scrolling row.
+
+The scoped follow-up inspected eight corrected screenshots: actual light/desktop
+and dark/mobile cards and focus, gallery button variants and real failed drafts.
+It reported no remaining actionable finding in those states, not blanket approval.
+Code follow-up confirmed the accessible-name correction and that only the static
+gallery specimen opts out of automatic failure focus.
+
+Evidence: `/tmp/kimino-library-final-review` and `/tmp/kimino-states-final` cover
+390/1440px in light/dark; all actual populated captures reported no horizontal
+overflow. Component/state tests passed 8/8. Final full checks are recorded below
+after completion. The gallery has no account adapter, persistence or publication;
+its fixtures use synthetic identities. This does not certify real-device rendering,
+screen-reader speech, server compatibility or unpictured component states.
+
+Final verification passed: `npm run check` (836 unit tests, types, formatting,
+production build and Sacho), `npm run build:design-system`, the complete isolated
+UI suite (196 tests, including the component workbench) and six write-flow tests.
+The separate static gallery build loaded four card specimens without page errors
+or mobile horizontal overflow; the ordinary app output excludes its HTML entry.
+`git diff --check` passed. No commit, push or deployment was performed.

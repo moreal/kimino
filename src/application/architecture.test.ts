@@ -102,6 +102,7 @@ it('domain and application do not import framework, browser adapters, or transpo
 const views = () => [
   'src/app.tsx',
   ...sources('src/components'),
+  ...sources('src/design-system'),
   ...(existsSync('src/routes') && readdirSync('src/routes').length ? sources('src/routes') : []),
 ];
 

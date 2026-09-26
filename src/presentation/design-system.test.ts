@@ -4,7 +4,16 @@ import { join, resolve } from 'node:path';
 import { BREAKPOINTS, CONTAINER_STEPS } from './design-tokens';
 
 const root = resolve(import.meta.dirname, '../..');
-const css = readFileSync(join(root, 'src/app.css'), 'utf8');
+function stylesheet(file: string): string {
+  return readFileSync(file, 'utf8').replace(
+    /@import ['"]([^'"]+)['"]([^;]*);/g,
+    (_, dependency: string, media: string) => {
+      const imported = stylesheet(resolve(file, '..', dependency));
+      return media.trim() ? `@media ${media.trim()} {${imported}}` : imported;
+    },
+  );
+}
+const css = stylesheet(join(root, 'src/app.css'));
 
 /** The stylesheet with every `:root { ... }` declaration block removed: the token block is
  *  where literal sizes are allowed to live, every other rule has to reach for a token. */
@@ -121,12 +130,10 @@ function palette(dark: boolean): Record<string, string> {
 describe('a reaction that is in effect is legible without its hue', () => {
   for (const dark of [false, true]) {
     const theme = dark ? 'dark' : 'light';
-    it(`keeps the pressed reaction readable and outlined in ${theme}`, () => {
+    it(`keeps selected actions and primary buttons readable in ${theme}`, () => {
       const colors = palette(dark);
-      // The word inside a pressed control against the tint it sits on: body-text contrast.
-      expect(contrast(colors['--accent'], colors['--accent-soft'])).toBeGreaterThanOrEqual(4.5);
-      // Its outline against the surface an unpressed control sits on: non-text contrast.
-      expect(contrast(colors['--accent'], colors['--surface'])).toBeGreaterThanOrEqual(3);
+      expect(contrast(colors['--accent'], colors['--surface'])).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colors['--accent-ink'], colors['--accent'])).toBeGreaterThanOrEqual(4.5);
       // The visibility badge word against the badge's own background.
       expect(contrast(colors['--ink-muted'], colors['--surface-2'])).toBeGreaterThanOrEqual(4.5);
     });
@@ -190,8 +197,8 @@ describe('the widths the stylesheet turns on are the named ones', () => {
       expect(css).toContain(`@container card (max-width: ${step}px)`);
     expect(css).toContain(`@container column (max-width: ${CONTAINER_STEPS.column.picker}px)`);
   });
-  it('declares :root once, at the top, and names the container steps in a comment', () => {
-    expect(css.match(/^:root\s*\{/gm)).toHaveLength(1);
+  it('declares the spacing scale once and names the container steps in a comment', () => {
+    expect(css.match(/--s-1:\s*4px/g)).toHaveLength(1);
     for (const name of Object.keys(CONTAINER_STEPS.card)) expect(css).toContain(`card.${name}`);
   });
   it('keeps one modal scrim and one z-index ladder, all tokens', () => {

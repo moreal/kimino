@@ -1,0 +1,190 @@
+/* ===========================================================================
+   Density
+   Desktop density (from the wide breakpoint, fine pointers), the compact setting,
+   coarse pointers.
+=========================================================================== */
+/* Desktop density: 36px controls and tighter cards on wide, fine-pointer screens. Coarse pointers keep 44px targets whatever the width. */
+@media (min-width: 1100px) {
+  :root {
+    --tap: 36px;
+  }
+  .note-card {
+    padding-top: var(--s-4);
+    padding-bottom: var(--s-1);
+  }
+  .note-actions .text-button {
+    padding: var(--s-1);
+  }
+  .composer {
+    padding-top: var(--s-4);
+  }
+  .compose-input textarea {
+    min-height: 60px;
+  }
+  /* The content-warning reveal keeps its 44px target: it is the one control read before the
+     words, and it sits inside body text. */
+  .content-warning-toggle {
+    min-height: 44px;
+  }
+  .primary-button,
+  .secondary-button {
+    padding-block: var(--s-1);
+  }
+  .connection-actions .primary-button,
+  .explore-button {
+    flex: 0 1 auto;
+    min-width: 160px;
+  }
+}
+@media (min-width: 1100px) {
+  .sidebar-switch {
+    display: inline-flex;
+  }
+}
+/* The right column is a flex column so the toast can rest at its foot: with short content
+   the pill sits at the bottom of the column's viewport-high box, and under a long thread it
+   sticks to the bottom edge of the column's own scrollport, so it is always on screen. It
+   lets every pointer through, and the column keeps room under its content while the toast
+   stands, so the last action row is never beneath it at the end of the scroll. */
+@media (min-width: 1100px) {
+  .context-column {
+    display: flex;
+    flex-direction: column;
+  }
+  .context-column > * {
+    flex-shrink: 0;
+  }
+  .context-column .toast-region {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    padding: var(--s-3) 0 0;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+  .context-column:has(.toast) {
+    padding-bottom: calc(var(--s-5) + var(--tap) + var(--s-3));
+  }
+  .context-column .toast {
+    max-width: 100%;
+  }
+}
+/* Wide screens: use the gutter so the thread column fits a full action row on one line. */
+@media (min-width: 1280px) {
+  .app-shell {
+    grid-template-columns: 220px minmax(0, 640px) minmax(380px, 460px);
+    max-width: 1400px;
+  }
+}
+/* Compact density (desktop, fine pointer): 14px/1.5 body, 12/16px card padding, 32px controls, meta on one line. Phones and coarse pointers ignore the setting. */
+@media (min-width: 1100px) {
+  .app-shell[data-density='compact'] {
+    --avatar: 32px;
+  }
+  .app-shell[data-density='compact'] .note-card {
+    padding: var(--s-2) var(--s-4) var(--s-1);
+    gap: var(--s-3);
+  }
+  .app-shell[data-density='compact'] .note-header {
+    flex-wrap: nowrap;
+    align-items: baseline;
+    min-width: 0;
+  }
+  .app-shell[data-density='compact'] .author {
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-shell[data-density='compact'] .timestamp {
+    white-space: nowrap;
+  }
+  .app-shell[data-density='compact'] .note-content {
+    font-size: var(--t-body);
+    line-height: var(--lh-body);
+    margin: var(--s-1) 0 0;
+  }
+  .app-shell[data-density='compact'] .note-content p:not(:last-child) {
+    margin-bottom: var(--s-2);
+  }
+  /* Each cue keeps the leading of its own type step; density only closes the gaps. */
+  .app-shell[data-density='compact'] .note-context,
+  .app-shell[data-density='compact'] .reply-context,
+  .app-shell[data-density='compact'] .shared-by {
+    margin-top: 0;
+  }
+  .app-shell[data-density='compact'] .note-actions {
+    margin-top: 0;
+    gap: 0;
+  }
+  .app-shell[data-density='compact'] .note-actions .text-button {
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    padding-block: var(--s-1);
+  }
+  .app-shell[data-density='compact'] .composer {
+    padding-top: var(--s-3);
+    padding-bottom: var(--s-2);
+  }
+  .app-shell[data-density='compact'] .note-card--focused .note-content {
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+  }
+  .app-shell[data-density='compact'] .thread-ancestors .note-content {
+    font-size: var(--t-body);
+    line-height: var(--lh-body);
+  }
+  .app-shell[data-density='compact'] .page-header {
+    min-height: 44px;
+  }
+  /* Compact turns the warning box into one line: the warning text, then 내용 보기 inline as
+     a text control, with the warm bar kept as a left rule so the line is still marked. */
+  .app-shell[data-density='compact'] .content-warning {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: var(--s-2);
+    margin: var(--s-1) 0 0;
+    padding: 0 0 0 var(--s-2);
+    border: 0;
+    border-left: 3px solid var(--warn);
+    border-radius: 0;
+    background: none;
+  }
+  .app-shell[data-density='compact'] .content-warning-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: var(--t-body);
+    line-height: var(--lh-body);
+  }
+  .app-shell[data-density='compact'] .content-warning-label svg {
+    margin-top: 2px;
+  }
+  .app-shell[data-density='compact'] .content-warning-toggle {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 0 var(--s-1);
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .app-shell[data-density='compact'] .content-warning-toggle[aria-expanded='true'] {
+    background: none;
+    text-decoration: none;
+  }
+}
+@media (min-width: 1100px) and (pointer: fine) {
+  .app-shell[data-density='compact'] {
+    --tap: 32px;
+  }
+}
+@media (pointer: coarse) {
+  :root {
+    --tap: 44px;
+  }
+}

@@ -1,0 +1,169 @@
+/* ===========================================================================
+   Base
+   Resets, focus, the icon set, the button kinds, avatars, accessibility helpers.
+=========================================================================== */
+/* Base */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--ground);
+}
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  padding: 0;
+  border-radius: var(--r-sm);
+}
+button:disabled {
+  cursor: default;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+button,
+a,
+input,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+.main-column:focus-visible {
+  outline: none;
+}
+
+/* Shared inline icon set, two rendering sizes only: 20px in action rows and navigation,
+   16px in meta lines and badges. The stroke is compensated so both read at the same weight. */
+.icon {
+  width: var(--icon);
+  height: var(--icon);
+  stroke-width: 1.75;
+  flex-shrink: 0;
+}
+.icon--sm {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke-width: 2;
+}
+.icon--trail {
+  margin-left: var(--s-1);
+  vertical-align: -2px;
+}
+.icon--spin {
+  animation: spin 900ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 var(--s-1);
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-family: var(--font);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--space-page);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--accent);
+  border-radius: 0;
+}
+
+/* Avatars */
+.avatar {
+  height: var(--avatar);
+  width: var(--avatar);
+  flex: 0 0 var(--avatar);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--hue-0-bg);
+  color: var(--hue-0-fg);
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  font-weight: 600;
+}
+.avatar[data-hue='1'] {
+  background: var(--hue-1-bg);
+  color: var(--hue-1-fg);
+}
+.avatar[data-hue='2'] {
+  background: var(--hue-2-bg);
+  color: var(--hue-2-fg);
+}
+.avatar[data-hue='3'] {
+  background: var(--hue-3-bg);
+  color: var(--hue-3-fg);
+}
+.avatar[data-hue='4'] {
+  background: var(--hue-4-bg);
+  color: var(--hue-4-fg);
+}
+.avatar[data-hue='5'] {
+  background: var(--hue-5-bg);
+  color: var(--hue-5-fg);
+}
+.avatar.self {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* Accessibility helpers */
+.sr-only,
+.skip-link:not(:focus) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip-link:focus {
+  position: fixed;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: var(--z-skip);
+  padding: var(--s-3);
+  background: var(--surface);
+  color: var(--ink);
+  border: 2px solid var(--accent);
+  border-radius: var(--r-sm);
+}

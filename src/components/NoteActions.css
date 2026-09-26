@@ -1,0 +1,92 @@
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: var(--s-1) 0 0 calc(var(--s-3) * -1);
+}
+.note-actions::-webkit-scrollbar {
+  display: none;
+}
+.note-actions .text-button {
+  gap: var(--s-1);
+  /* Keep the seven-control desktop row portable across system-font metrics. */
+  padding-inline: var(--s-2);
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.note-actions .text-button:focus-visible {
+  outline-offset: calc(var(--ring-offset) * -1);
+}
+/* A control's word folds behind its icon where a card step says so: the step sets
+   `--action-word: folded` on the control and the word inside takes the visually-hidden
+   idiom (a style query reads the control's property), so the word stays in the accessible
+   name and the step spells the idiom once. */
+@container style(--action-word: folded) {
+  .action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+.reaction-button[aria-pressed='true'],
+.save-button[aria-pressed='true'] {
+  color: var(--accent);
+}
+.note-actions .text-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* The tapped reaction stays readable while its request is in flight. */
+.note-actions .reaction-button[aria-busy='true'] {
+  opacity: 0.7;
+  cursor: progress;
+}
+.note-actions .count {
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.draft-badge {
+  margin-left: var(--s-1);
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--t-xs);
+  font-weight: 600;
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+}
+/* My own note's 수정 and 삭제 follow the five everyone gets. In a wide column both stand
+   inline and the 관리 disclosure is not drawn; the narrow-column rule at the end of the
+   file folds them behind it (`aria-expanded` on the control, `data-open` on the group) and
+   opens them as a row of their own under the six. The group's own copy of 저장 is drawn only
+   on the narrowest cards, by the rule at the end of the file. */
+.manage-toggle {
+  display: none;
+}
+.manage-group {
+  display: contents;
+}
+.save-button--folded {
+  display: none;
+}
+.manage-toggle[aria-expanded='true'] {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+/* The one destructive control on a card sits at the weight of its neighbours at rest, so
+   the eye does not land on it first; it turns to the danger colour when pointed at, focused,
+   or while its confirmation is open. It still only opens that confirmation. */
+.note-actions .delete-button:hover:not(:disabled),
+.note-actions .delete-button:focus-visible,
+.note-actions .delete-button[aria-expanded='true'] {
+  color: var(--danger);
+}

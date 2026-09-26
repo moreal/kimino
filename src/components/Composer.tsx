@@ -23,7 +23,10 @@ import {
 } from '../presentation/note-body';
 import FailureAlert from './FailureAlert';
 import Icon from './Icons';
+import './Composer.css';
 import WarningGate from './WarningGate';
+import Button from './ui/Button';
+import { TextArea, TextInput } from './ui/Field';
 
 /**
  * The draft ceiling, the domain's. It is not a `maxlength`: silently swallowing the tail of
@@ -52,6 +55,7 @@ export default function Composer(props: {
   onOptions?: (value: ComposeOptions) => void;
   /** The failure of this composer's last publish, owned by the feed view model. */
   error?: FailureMessage;
+  autoFocusError?: boolean;
   disabled?: boolean;
   images?: readonly ImageDraft[];
   uploads?: Readonly<Record<string, ImageUploadState>>;
@@ -168,7 +172,7 @@ export default function Composer(props: {
   createEffect(
     () => props.error,
     (error) => {
-      if (!error || !errorEl) return;
+      if (!error || !errorEl || props.autoFocusError === false) return;
       const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
       errorEl.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
       errorEl.focus({ preventScroll: true });
@@ -242,7 +246,7 @@ export default function Composer(props: {
             <Icon name="warning" class="icon--sm" />
             {contentCopy.warningLabel}
           </span>
-          <input
+          <TextInput
             type="text"
             placeholder={contentCopy.warningPlaceholder}
             value={options().summary}
@@ -273,7 +277,7 @@ export default function Composer(props: {
                 : copy.composer.newLabel}
           </span>
           {/* An edit starts full, so it asks no question: no placeholder at all. */}
-          <textarea
+          <TextArea
             placeholder={
               props.editing
                 ? undefined
@@ -330,19 +334,16 @@ export default function Composer(props: {
             </For>
           </fieldset>
         </Show>
-        <button
+        <Button
+          variant="ghost"
           type="button"
-          class={
-            warningOpen()
-              ? 'text-button warning-toggle warning-toggle--on'
-              : 'text-button warning-toggle'
-          }
+          class={warningOpen() ? 'warning-toggle warning-toggle--on' : 'warning-toggle'}
           aria-pressed={warningOpen() ? 'true' : 'false'}
           onClick={toggleWarning}
           disabled={busy()}
         >
           {warningOpen() ? contentCopy.removeWarning : contentCopy.addWarning}
-        </button>
+        </Button>
       </div>
       <Show when={limits().hint}>
         <p class="visibility-limit">{limits().hint}</p>
@@ -404,8 +405,8 @@ export default function Composer(props: {
           <span aria-live="polite" class="sr-only">
             {over() ? contentCopy.overLimitHelp : ''}
           </span>
-          <button
-            class="primary-button"
+          <Button
+            variant="primary"
             type="submit"
             disabled={
               busy() || readingImage() || over() || (!text().trim() && !props.images?.length)
@@ -421,16 +422,17 @@ export default function Composer(props: {
                   ? copy.composer.publishReply
                   : copy.composer.publish}
             <Icon name="external" />
-          </button>
+          </Button>
           <Show when={(props.replyTo || props.editing) && props.onCancel}>
-            <button
+            <Button
+              variant="ghost"
               type="button"
-              class="text-button compose-cancel"
+              class="compose-cancel"
               onClick={() => props.onCancel?.()}
               disabled={busy()}
             >
               {props.editing ? copy.editComposer.cancel : copy.composer.cancel}
-            </button>
+            </Button>
           </Show>
         </div>
       </footer>

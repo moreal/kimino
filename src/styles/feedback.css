@@ -1,0 +1,306 @@
+/* ===========================================================================
+   Feedback
+   Alerts and failure details, the toast, the session reminder, empty and loading
+   states, the way back to the top.
+=========================================================================== */
+/* Feedback: alerts, notices, empty and loading states */
+.page-error {
+  position: relative;
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
+  padding: var(--s-3) calc(var(--s-6) + var(--s-2)) var(--s-3) var(--s-4);
+  margin: var(--s-3) var(--space-page);
+  border-radius: var(--r-md);
+  color: var(--danger);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow-sm);
+}
+.page-error p {
+  margin: var(--s-1) 0 0;
+}
+.page-error-dismiss {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-1);
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  color: var(--danger);
+}
+.connection-form .page-error {
+  margin: 0;
+  box-shadow: none;
+}
+/* Inline publish failure: in flow, right under the composer's button row. */
+.composer .compose-error {
+  margin: var(--s-3) 0 0;
+  padding-right: var(--s-4);
+}
+.compose-error:focus-visible {
+  outline: var(--ring);
+  outline-offset: var(--ring-offset);
+}
+.error-detail {
+  margin-top: var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.error-detail summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.error-detail pre {
+  margin: 0 0 var(--s-1);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+}
+/* Render-halt fallback from the entry point: plain words, details on request. */
+.app-error {
+  max-width: 560px;
+  margin: calc(var(--s-6) + var(--s-4)) auto;
+  padding: var(--s-5);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-family: var(--font);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+}
+.app-error p {
+  margin: 0 0 var(--s-3);
+  font-weight: 600;
+}
+.app-error pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+/* Toast: a narrow pill fixed at the bottom of the viewport, out of the column's flow. It
+   moves nothing - the composer at the top and the first card stay exactly where they were
+   while it stands, so a second tap lands on the control it was aimed at - and it lets taps
+   through: only its own close control takes the pointer. It sits above the phone tab bar
+   and the 맨 위로 slot, safe-area aware; a reply composer scrolled to the bottom can be
+   overlapped by it for its three seconds, but never blocked. On the desktop layout it is
+   not fixed at all: the shell places it at the foot of the right column (see below), so it
+   never stands over the reading column's actions. */
+.toast-region {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--space-page) + var(--tap) + var(--s-2) + env(safe-area-inset-bottom));
+  z-index: var(--z-toast);
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 0 var(--space-page);
+  pointer-events: none;
+}
+.toast {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  max-width: min(100%, 480px);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--success-line);
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--success);
+  background: var(--success-soft);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  animation: toast-in 180ms ease-out;
+}
+.toast-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--tap);
+  min-height: var(--tap);
+  border: 1px solid var(--success-line);
+  border-left: 0;
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  color: var(--success);
+  background: var(--success-soft);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+  animation: toast-in 180ms ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+}
+/* Said once after a connect that left the token in memory: quiet, in the column's flow, and
+   closed for good by its own control. It wraps rather than truncating - the sentence is the
+   whole point of it. */
+.session-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--space-page);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+}
+.session-hint .icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--ink-muted);
+}
+.session-hint p {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+}
+.session-hint-dismiss {
+  flex: 0 0 auto;
+  width: var(--tap);
+  height: var(--tap);
+  margin: calc(var(--s-2) * -1) 0;
+  color: var(--ink-muted);
+}
+/* On the desktop layout it sits under the account line, in the right column, so the first
+   card keeps its place; on one column it follows the composer at the composer's own inset. */
+.context-column .session-hint {
+  margin: 0 0 var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.main-column .session-hint {
+  padding-block: var(--s-2);
+}
+.main-column .session-hint p {
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+}
+/* On a phone it is one compact line in the column's flow, under the composer: nothing is
+   painted over a card or the list's foot, and the first card moves down by one line. The
+   sentence is clipped to that line until 자세히 opens it; 안내 닫기 still ends it for good. */
+.session-hint-more {
+  display: none;
+}
+.empty-state {
+  padding: calc(var(--s-6) + var(--s-4)) var(--s-5);
+  text-align: center;
+}
+.empty-state-icon {
+  width: calc(var(--icon) * 2);
+  height: calc(var(--icon) * 2);
+  color: var(--accent-line);
+}
+.empty-state h2 {
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+  font-weight: 600;
+  margin: var(--s-2) 0;
+}
+.empty-state p {
+  font-size: var(--t-body);
+  color: var(--ink-muted);
+  line-height: var(--lh-body);
+  margin: 0 0 var(--s-4);
+}
+.feed-footnote {
+  padding: var(--s-4) var(--space-page);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.skeleton-card {
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-5) var(--space-page);
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-avatar,
+.skeleton-line {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.skeleton-avatar {
+  width: var(--avatar);
+  height: var(--avatar);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.skeleton-lines {
+  flex: 1;
+  display: grid;
+  gap: var(--s-3);
+  padding-top: var(--s-1);
+}
+.skeleton-line {
+  height: 12px;
+  border-radius: var(--r-sm);
+}
+.skeleton-line.short {
+  width: 35%;
+}
+.skeleton-avatar::after,
+.skeleton-line::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--shimmer), transparent);
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+.to-top {
+  position: fixed;
+  right: var(--space-page);
+  bottom: var(--space-page);
+  z-index: var(--z-float);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  animation: to-top-in 160ms ease-out;
+}
+@keyframes to-top-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--s-2));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}

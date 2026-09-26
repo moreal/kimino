@@ -1,0 +1,316 @@
+/* People management shares the quiet reading palette while keeping address,
+   relationship state and the next action in distinct lines. */
+.people-open {
+  flex: 0 0 auto;
+  min-height: var(--tap);
+  padding-inline: var(--s-2);
+  white-space: nowrap;
+}
+.people-dialog {
+  overflow: hidden;
+  width: min(560px, calc(100% - var(--s-6)));
+  max-height: calc(100dvh - var(--s-6));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  overscroll-behavior: contain;
+}
+.people-dialog::backdrop {
+  background: var(--scrim);
+}
+.people-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.people-chrome {
+  padding: var(--s-4) var(--s-5) 0;
+  border-bottom: 1px solid var(--line);
+  flex: none;
+}
+.people-body {
+  padding: var(--s-4) var(--s-5);
+  overflow-y: auto;
+  min-height: 0;
+  overscroll-behavior: contain;
+}
+.people-footer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-5);
+  border-top: 1px solid var(--line);
+  flex: none;
+}
+.people-view-switch,
+.people-filters {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.people-view-switch {
+  margin-top: var(--s-2);
+}
+.people-view-switch button,
+.people-filters button,
+.people-footer button {
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: var(--s-3);
+  font-variant-numeric: tabular-nums;
+}
+.people-view-switch button[aria-pressed='true'],
+.people-filters button[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.people-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.people-filters button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+@media (min-width: 600px) {
+  .people-filters {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.people-search {
+  display: grid;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+}
+.people-search input {
+  min-width: 0;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  font-weight: 400;
+}
+.people-list .relationship-address {
+  word-break: normal;
+}
+.people-list-controls {
+  margin-block: var(--s-4);
+}
+.people-empty {
+  padding-block: var(--s-4);
+}
+
+.people-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.people-header h2 {
+  margin: 0;
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+}
+.people-help,
+.relationship-help,
+.relationship-address {
+  margin: var(--s-2) 0;
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+  word-break: keep-all;
+}
+.people-form {
+  display: grid;
+  gap: var(--s-2);
+  margin-block: var(--s-5);
+}
+.people-form label {
+  display: grid;
+  gap: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+}
+.people-form input {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--s-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  font-weight: 400;
+}
+.people-form > button {
+  justify-self: start;
+}
+.people-candidate {
+  padding: var(--s-4);
+  margin-block: var(--s-4);
+  border: 1px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+}
+.people-list {
+  list-style: none;
+  margin: var(--s-4) 0 0;
+  padding: 0;
+}
+.people-person {
+  padding-block: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+.people-identity {
+  display: grid;
+  gap: var(--s-1);
+  overflow-wrap: anywhere;
+}
+.people-identity > span {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.relationship-control {
+  margin-block: var(--s-3);
+  min-width: 0;
+}
+.relationship-status {
+  margin: var(--s-2) 0;
+  font-size: var(--t-sm);
+  font-weight: 600;
+  line-height: var(--lh-sm);
+}
+.relationship-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.people-error,
+.relationship-error {
+  color: var(--danger);
+  margin-block: var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+}
+.actor-people-link {
+  margin-bottom: var(--s-3);
+}
+
+.actor-sheet {
+  width: min(420px, calc(100% - var(--s-6)));
+  color: var(--ink);
+  overscroll-behavior: contain;
+}
+.actor-sheet::backdrop {
+  background: var(--scrim);
+}
+
+.people-timeline {
+  margin-top: var(--s-3);
+}
+
+.people-footer .people-timeline {
+  margin: 0;
+}
+
+.attachment-error,
+.attachment-status {
+  margin: 0;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.attachment-error {
+  color: var(--danger);
+}
+
+.read-continuation {
+  margin: var(--s-4);
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.read-continuation h2 {
+  margin: 0 0 var(--s-2);
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+}
+.read-continuation p {
+  margin: var(--s-2) 0;
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+}
+.read-continuation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.read-continuation-actions button {
+  min-height: var(--tap);
+}
+
+.relationship-read-continuation {
+  display: grid;
+  gap: var(--s-2);
+  width: 100%;
+}
+.relationship-read-continuation h3 {
+  margin: 0;
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+}
+.relationship-read-continuation p {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+.relationship-read-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.relationship-read-actions button {
+  min-height: var(--tap);
+}
+
+.reply-audience {
+  overflow-wrap: anywhere;
+}
+.reply-audience ul {
+  margin: 0.25rem 0 0;
+  padding-inline-start: 1.25rem;
+}
+.reply-audience li > span:first-child {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.reply-audience li > span:last-child {
+  display: block;
+}

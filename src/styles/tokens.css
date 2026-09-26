@@ -1,0 +1,69 @@
+@import './palette-light.css';
+@import './palette-dark.css' (prefers-color-scheme: dark);
+
+/* ===========================================================================
+   Tokens
+   Colors are defined once for light and once for dark; components only use tokens.
+   Spacing is a six-step 4px scale; type is a seven-step scale where each size owns one
+   line-height; weights are 400/500/600; radii are sm/md/pill. `:root` is declared once;
+   the media blocks further down only re-tune --tap, --space-page and --avatar.
+=========================================================================== */
+:root {
+  color-scheme: light dark;
+  /* Spacing: the whole scale, six steps of 4px */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --space-page: var(--s-5);
+  /* Type: every step carries exactly one line-height, so a size always reads the same */
+  --t-xs: 12px;
+  --lh-xs: 1.4;
+  --t-sm: 13px;
+  --lh-sm: 1.45;
+  --t-body: 14px;
+  --lh-body: 1.5;
+  --t-base: 15px;
+  --lh-base: 1.55;
+  --t-md: 16px;
+  --lh-md: 1.5;
+  --t-lg: 18px;
+  --lh-lg: 1.35;
+  --t-xl: 28px;
+  --lh-xl: 1.2;
+  /* Weights: 400 body, 500 quiet emphasis, 600 headings and controls. Nothing else. */
+  --font: 'Avenir Next', 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  /* Shape */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-pill: 999px;
+  /* Icons: one size per context, stroke compensated so the weight reads the same */
+  --icon: 20px;
+  --icon-sm: 16px;
+  --ring: 2px solid var(--accent);
+  --ring-offset: 2px;
+  --avatar: 40px;
+  --tap: 44px;
+  /* Modal scrim: one value in both themes. */
+  --scrim: rgba(31, 42, 35, 0.35);
+  /* Stacking, lowest to highest: the skip link when focused, the phone tab bar, the phone
+     toast (under the 맨 위로 control, which steps over it), floating controls, the toast
+     pill elsewhere (over those controls), dialogs. */
+  --z-skip: 2;
+  --z-tab-bar: 4;
+  --z-toast-phone: 5;
+  --z-float: 6;
+  --z-toast: 7;
+  --z-dialog: 8;
+  /* Base type: the whole document reads at the md step. */
+  font-family: var(--font);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  color: var(--ink);
+  background: var(--ground);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}

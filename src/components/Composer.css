@@ -1,0 +1,408 @@
+/* ===========================================================================
+   Composer
+   The form, its footer and hints, the inline reply and edit frames, the warning input,
+   the visibility picker.
+=========================================================================== */
+/* Composer */
+.composer {
+  padding: var(--s-5) var(--space-page) var(--s-3);
+  border-bottom: 1px solid var(--line);
+}
+.compose-row {
+  display: flex;
+  gap: var(--s-3);
+}
+.compose-account {
+  display: none;
+}
+.compose-input {
+  min-width: 0;
+  width: 100%;
+}
+.compose-input textarea {
+  width: 100%;
+  min-height: 72px;
+  /* The same step as a note's body, so the prompt does not read louder than the posts. */
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  resize: vertical;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink);
+  padding: var(--s-2) 0;
+}
+.compose-input textarea::placeholder {
+  color: var(--ink-muted);
+}
+/* The footer wraps as a whole: the audience line drops to its own row before the buttons
+   are squeezed, and the primary button leads the control group, taking the full width of a
+   second row when the row it starts on cannot hold both buttons. */
+.composer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-2);
+}
+.visibility {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.compose-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-left: auto;
+}
+.compose-controls .primary-button {
+  order: 1;
+  flex: 1 1 auto;
+}
+.compose-cancel {
+  order: 2;
+  padding-inline: var(--s-3);
+}
+.compose-controls .character-count {
+  order: 3;
+}
+.character-count {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* Past the ceiling the count stops being a quiet number: it says so and the button is off. */
+.character-count--over {
+  color: var(--danger);
+  font-weight: 600;
+}
+.draft-hint {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  text-align: right;
+}
+/* The "수정됨" rule waits behind a disclosure at the foot of the edit form: read once, not
+   printed on every edit. */
+.edit-marker-hint {
+  margin: var(--s-1) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  text-align: right;
+}
+.edit-marker-hint summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.edit-marker-hint p {
+  margin: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.reply-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+}
+.compose-parent {
+  border-left: 2px solid var(--accent-line);
+  margin: var(--s-1) 0 var(--s-3);
+  padding: 0 0 0 var(--s-3);
+  max-height: 128px;
+  overflow: auto;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.compose-parent p {
+  margin: 0 0 var(--s-2);
+}
+.inline-reply {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent);
+}
+/* Feed composer folds to one line until it is focused or holds a draft. */
+.main-composer .composer {
+  padding-top: var(--s-3);
+}
+/* `composer--collapsed` is set by the component until the writer first focuses the textarea
+   (not by :focus-within): a form that folds on blur or unfolds on an option's mousedown moves
+   the control under the pointer before the click lands. */
+.main-composer .composer--collapsed textarea {
+  min-height: var(--tap);
+  height: var(--tap);
+  resize: none;
+}
+.main-composer .composer--collapsed .composer-footer,
+.main-composer .composer--collapsed .draft-hint,
+.main-composer .composer--collapsed .compose-options,
+.main-composer .composer--collapsed .visibility-limit,
+.main-composer .composer--collapsed .compose-account,
+.main-composer .composer--collapsed .image-picker {
+  display: none;
+}
+.inline-reply .composer {
+  padding-left: calc(var(--space-page) - 3px);
+}
+
+/* Local image drafts: preview first, editable description alongside it. */
+.connection-capabilities,
+.connection-guidance,
+.image-picker-guidance {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.connection-capabilities summary,
+.connection-guidance summary,
+.image-picker-guidance summary {
+  cursor: pointer;
+  min-height: var(--tap);
+  display: list-item;
+  align-content: center;
+}
+.image-picker {
+  min-width: 0;
+  margin: var(--s-3) 0;
+  padding: var(--s-3) 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.image-picker:has(.image-picker-guidance) {
+  margin-block: 0 var(--s-2);
+  padding-top: 0;
+  border-top: 0;
+}
+.warning-toggle {
+  padding-inline: 0;
+}
+.image-picker-toolbar,
+.image-picker-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.image-picker .quiet-button {
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  background: var(--surface);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.image-picker-count,
+.image-picker-help,
+.image-picker-disclosure,
+.image-picker-status {
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.image-picker-count {
+  font-variant-numeric: tabular-nums;
+}
+.image-picker-help,
+.image-picker-disclosure,
+.image-picker-status {
+  margin: var(--s-2) 0 0;
+  overflow-wrap: anywhere;
+}
+.image-picker-error {
+  color: var(--danger);
+}
+.image-picker-list {
+  list-style: none;
+  margin: var(--s-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-3);
+}
+.image-picker-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.image-picker-preview {
+  width: 120px;
+  height: 90px;
+  object-fit: contain;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+}
+.image-picker-details {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.image-picker-alt {
+  display: grid;
+  gap: var(--s-1);
+}
+.image-picker-alt > span {
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.image-picker-alt textarea {
+  width: 100%;
+  min-height: var(--tap);
+  resize: vertical;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  padding: var(--s-2);
+  color: var(--ink);
+  background: var(--surface);
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+}
+.image-picker-actions {
+  margin-top: var(--s-2);
+}
+
+/* The edit form reuses the reply composer's frame with its own accent side. */
+.inline-edit {
+  background: var(--surface-2);
+  border-left: 3px solid var(--accent-line);
+}
+.inline-edit .composer {
+  padding-left: calc(var(--space-page) - 3px);
+}
+.compose-scope--fixed {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+/* Composer: warning input, segmented visibility picker, reply limit hint. */
+.compose-warning {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-2);
+}
+.compose-warning-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  width: fit-content;
+  padding: var(--s-1) var(--s-2) var(--s-1) var(--s-1);
+  border-radius: var(--r-pill);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+}
+.compose-warning input {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--warn-line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+}
+.compose-warning input:focus-visible {
+  outline: var(--ring);
+  outline-offset: 1px;
+}
+.compose-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  margin-top: var(--s-1);
+}
+.visibility-picker {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-1);
+  width: 100%;
+  margin: 0;
+  padding: var(--s-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.visibility-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: var(--tap);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  cursor: pointer;
+  word-break: keep-all;
+}
+.visibility-option input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.visibility-option--active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: var(--shadow-sm);
+}
+.visibility-option:has(input:disabled) {
+  opacity: 0.45;
+  cursor: default;
+  text-decoration: line-through;
+}
+.visibility-option:has(input:focus-visible) {
+  outline: var(--ring);
+  outline-offset: 1px;
+}
+.visibility-picker:disabled .visibility-option {
+  cursor: default;
+}
+.warning-toggle--on {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.visibility-limit {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+/* What this composer cannot do yet, said once where the writer would look for it. */
+.compose-scope {
+  margin: var(--s-2) 0 0;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  color: var(--ink-muted);
+}

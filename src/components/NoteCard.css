@@ -1,0 +1,582 @@
+/* ===========================================================================
+   Cards
+   Note cards, their body (visibility, content warnings, attachments), the action row,
+   the delete confirmation, the conversation view, the foot of the list, the saved list.
+=========================================================================== */
+/* Note cards */
+.note-card {
+  padding: var(--s-5) var(--space-page) var(--s-2);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: var(--s-3);
+  container-type: inline-size;
+  container-name: card;
+}
+.note-card:focus-visible {
+  outline: var(--ring);
+  outline-offset: -3px;
+  border-radius: var(--r-sm);
+}
+.timeline:focus-visible {
+  outline: none;
+}
+.note-body {
+  flex: 1;
+  min-width: 0;
+}
+.note-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-2);
+}
+.author {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+/* The address after the name: quiet, on the same line while it fits. */
+.author-handle {
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+/* The name is a button that opens the in-app author sheet; it reads like the link it replaced. */
+button.author {
+  padding: 0;
+  border-radius: var(--r-sm);
+  min-height: 0;
+}
+.timestamp {
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 400;
+  color: var(--ink-muted);
+}
+.note-context {
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  font-weight: 400;
+  line-height: var(--lh-xs);
+  margin: 0 0 var(--s-1);
+}
+.reply-context,
+.shared-by {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-1) 0 0;
+}
+.reply-context--button {
+  font: inherit;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  text-align: left;
+  text-decoration: none;
+  text-underline-offset: 3px;
+  color: var(--ink-muted);
+  min-height: 28px;
+}
+a.reply-context {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.note-content {
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  color: var(--ink);
+  margin: var(--s-2) 0 var(--s-1);
+  overflow-wrap: anywhere;
+}
+.note-content p {
+  margin: 0 0 var(--s-3);
+}
+.note-content p:last-child {
+  margin-bottom: 0;
+}
+.note-content pre {
+  white-space: pre-wrap;
+  padding: var(--s-3);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+.note-content blockquote {
+  border-left: 3px solid var(--accent-line);
+  padding-left: var(--s-3);
+  margin: 0 0 var(--s-3);
+}
+.note-content a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--accent);
+}
+/* Sanitized remote HTML: keep foreign headings and media in scale with the body. */
+.note-content h1,
+.note-content h2,
+.note-content h3,
+.note-content h4,
+.note-content h5,
+.note-content h6 {
+  font-size: var(--t-md);
+  font-weight: 600;
+  margin: 0 0 var(--s-2);
+  line-height: var(--lh-md);
+}
+.note-content svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Deleting my own note: what it does, said in the page before anything is sent. Focus lands
+   on 삭제 취소, so the destructive button is never what a stray key press activates. */
+.delete-confirm {
+  margin: var(--s-2) 0 0;
+  padding: var(--s-3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+}
+.delete-confirm-heading {
+  margin: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--danger);
+}
+.delete-confirm-body {
+  margin: var(--s-1) 0 var(--s-3);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.delete-confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.note-edited {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-1) 0 0;
+}
+
+/* Reaction outcome for one note, right where the tap happened. */
+.note-feedback {
+  margin: var(--s-1) 0 0;
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  overflow-wrap: anywhere;
+}
+
+/* --- note body: cw/media/visibility --- */
+/* The one badge that must never be a bare glyph: the icon carries the word beside it. */
+/* Whose note this is, in a word. On a one-person server every author shares the host, so
+   the handle cannot tell them apart and colour alone would leave a greyscale reader out. */
+.own-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin: var(--s-1) 0 0;
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  vertical-align: middle;
+}
+.visibility-word {
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* Content warning: the one warm, accented bar in a card. */
+.content-warning {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
+  margin: var(--s-2) 0 var(--s-1);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--warn-line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-md);
+  background: var(--warn-soft);
+}
+.content-warning-label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin: 0;
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  font-weight: 600;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.content-warning-label svg {
+  flex-shrink: 0;
+  margin-top: var(--s-1);
+  color: var(--warn);
+}
+.content-warning-toggle {
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  font-weight: 600;
+  color: var(--accent);
+}
+.content-warning-toggle[aria-expanded='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+}
+.attachments {
+  list-style: none;
+  margin: var(--s-2) 0 var(--s-1);
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+/* Attachment rows: a neutral outline, no fill, so they sit below the warning bar. */
+.attachment {
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: transparent;
+  padding: var(--s-2) var(--s-3);
+}
+.attachment-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+  min-height: var(--tap);
+}
+.attachment-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--ink-muted);
+  white-space: nowrap;
+}
+.attachment-alt {
+  flex: 1 1 160px;
+  min-width: 0;
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.attachment-alt--none {
+  color: var(--ink-muted);
+  font-style: italic;
+}
+.attachment-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.attachment-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: var(--s-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+}
+/* What a note's share control will do, said above the row that does it. */
+.share-scope {
+  margin: var(--s-2) 0 0;
+  color: var(--ink-muted);
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  overflow-wrap: anywhere;
+}
+
+/* Conversation view */
+.conversation {
+  position: relative;
+}
+.thread-parent {
+  position: relative;
+}
+.thread-parent .note-card {
+  border-bottom: 0;
+  padding-bottom: var(--s-3);
+}
+.thread-parent::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--space-page) + var(--avatar) / 2 - 1px);
+  top: calc(var(--s-5) + var(--avatar) + var(--s-1));
+  bottom: 0;
+  width: 2px;
+  border-radius: var(--r-pill);
+  background: var(--accent-line);
+}
+/* The note the conversation was opened from: larger type says which one it is. It carries
+   no bar of its own, so the roving focus outline is the only "current" mark in the column
+   and j/k never leave two marks on two cards. */
+.thread-focus .note-card {
+  padding-top: var(--s-5);
+  padding-bottom: var(--s-3);
+  background: var(--surface);
+}
+.note-card--focused .author {
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+}
+.note-card--focused .note-content {
+  font-size: var(--t-lg);
+  line-height: var(--lh-lg);
+  margin-top: var(--s-3);
+}
+/* Section header: plain text over a hairline, no box. */
+.conversation-label {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--ink-muted);
+  margin: 0;
+  padding: var(--s-4) var(--space-page) var(--s-2);
+  border-bottom: 1px solid var(--line);
+  background: none;
+}
+/* Ancestors read quieter than the focused note; one connector joins the chain. */
+.thread-ancestors .note-card {
+  padding-top: var(--s-4);
+}
+.thread-ancestors .note-content {
+  font-size: var(--t-base);
+  line-height: var(--lh-base);
+  color: var(--ink-2);
+}
+.thread-ancestors .author {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+/* Replies below: one indent step per level, capped (3 on desktop, 2 on phones); deeper
+   replies sit flat under the last level with a drawn "…에게" cue. */
+.thread-reply {
+  --indent: var(--s-5);
+  --indents: min(var(--depth, 0), 3);
+  position: relative;
+  padding-left: calc(var(--indents) * var(--indent));
+}
+.thread-reply .note-card {
+  padding-left: calc(var(--space-page) + var(--s-3));
+}
+.thread-reply .avatar {
+  --avatar: 32px;
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.thread-reply .inline-reply .composer {
+  padding-left: calc(var(--space-page) + var(--s-3) - 3px);
+}
+.thread-reply[data-depth='1']::before,
+.thread-reply[data-depth='2']::before,
+.thread-reply[data-depth='3']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--indents) * var(--indent) + var(--space-page) - var(--s-2));
+  width: 2px;
+  background: var(--line);
+}
+.reply-cue {
+  display: none;
+  margin: 0;
+  padding: var(--s-2) var(--space-page) 0 calc(var(--space-page) + var(--s-3));
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.thread-reply--flat .reply-cue {
+  display: block;
+}
+.thread-reply--flat .note-card {
+  padding-top: var(--s-2);
+}
+.missing-parent,
+.scope-note {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  padding: var(--s-3) var(--space-page);
+  color: var(--ink-muted);
+  background: var(--surface-2);
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.missing-parent a {
+  text-decoration: underline;
+  color: var(--accent);
+}
+.thread-note {
+  margin: 0;
+  padding: var(--s-3) var(--space-page);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-2);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+
+/* The foot of the list: client-side paging over loaded notes, the timeline's own report of its last read, and a way back to the top of a long list. */
+.feed-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--space-page) var(--s-6);
+  border-top: 1px solid var(--line);
+}
+.feed-more {
+  gap: var(--s-2);
+}
+.feed-more-count {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.feed-status {
+  display: inline;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+/* The reasons behind the count, one sentence each, behind a disclosure: still printed in
+   the page and reachable on every width, but never the second-loudest text on it. The
+   disclosure is inline after the count's sentence, and its sentences open as blocks under
+   the whole line. */
+.feed-details {
+  display: inline;
+  margin: 0 0 0 var(--s-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+}
+.feed-details summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.feed-details p {
+  display: block;
+  margin: 0 0 var(--s-1);
+  overflow-wrap: anywhere;
+}
+.feed-status-dropped,
+.feed-status-refused {
+  color: var(--ink-2);
+}
+/* What the server said it holds against what this client read. It only raises its voice
+   when something was declared and never arrived. */
+.feed-reach {
+  margin: 0;
+  color: var(--ink-muted);
+  overflow-wrap: anywhere;
+}
+.feed-reach--short {
+  color: var(--ink-2);
+}
+/* Saved list */
+.unavailable-saved {
+  padding: var(--s-4) var(--space-page);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.unavailable-saved h2 {
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  margin: 0 0 var(--s-2);
+}
+.unavailable-saved p {
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  color: var(--ink-muted);
+  margin: 0;
+}
+.saved-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  border-top: 1px solid var(--line);
+  padding-top: var(--s-2);
+  margin-top: var(--s-3);
+}
+.saved-link > div {
+  min-width: 0;
+}
+.saved-link span {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+}
+.saved-link a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: underline;
+}
+.saved-link button {
+  white-space: nowrap;
+}

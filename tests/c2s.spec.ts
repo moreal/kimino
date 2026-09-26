@@ -64,7 +64,7 @@ test('real ONI: a like is stored in the outbox and withdrawn by deleting its act
   await connect(page, credentials);
   // React to a fresh post rather than a possibly already liked one.
   const { card, objectUrl } = await publishNote(page, `좋아요를 받을 이야기 ${Date.now()}`);
-  // The label changes with the state (좋아요 → 좋아함), so the name is matched on its stem.
+  // The label changes with the state (좋아요 → 좋아요 취소), so the name is matched on its stem.
   const like = card.getByRole('button', { name: /^좋아/ });
   await expect(like).toHaveAttribute('aria-pressed', 'false');
   await like.click();

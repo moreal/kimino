@@ -3,18 +3,20 @@ import type { ReactionKind, TimelineNote } from '../domain/social';
 import { copy, joinLine } from '../presentation/copy';
 import { reactedBy, withCount } from '../presentation/note-display';
 import Icon from './Icons';
+import Button from './ui/Button';
+import './NoteActions.css';
 
 /**
  * The reply / share / like / save / thread row under a note card. Every control names what
  * it does in its accessible name at every width; the stylesheet's card steps decide which
- * words are drawn. A reaction that is in effect says so in its label and carries an outline,
+ * words are drawn. A reaction that is in effect keeps its shape and carries a filled icon or state label,
  * so the state never rests on hue alone.
  *
  * My own note adds 수정 and 삭제. In a card under the `fold` step (the reading column of an
  * 1100-1280 window, the thread panel, a phone) those two fold behind one 관리 disclosure at
  * the end of the first row, so a card is one row of actions tall; the disclosure opens them
  * inline, Escape closes it (not while a delete confirmation is open), and the stylesheet
- * alone decides which of the two shapes is drawn. On narrower cards a like, share or 대화
+ * alone decides which of the two shapes is drawn. On narrower cards a share or 대화
  * that carries a count keeps its icon and count and folds its word, so six controls still
  * share one line; the word stays in the accessible name.
  */
@@ -57,8 +59,9 @@ export default function NoteActions(props: {
   const shareLabel = () => (shared() ? copy.reactions.shared : copy.reactions.share);
   const saveLabel = () => (props.saved ? copy.reactions.saved : copy.reactions.save);
   const save = (folded = false) => (
-    <button
-      class={folded ? 'text-button save-button save-button--folded' : 'text-button save-button'}
+    <Button
+      variant="ghost"
+      class={folded ? 'save-button save-button--folded' : 'save-button'}
       aria-pressed={props.saved ? 'true' : 'false'}
       aria-label={saveLabel()}
       title={saveLabel()}
@@ -66,7 +69,7 @@ export default function NoteActions(props: {
     >
       <Icon name="bookmark" filled={props.saved} />
       <span class="action-label">{saveLabel()}</span>
-    </button>
+    </Button>
   );
   return (
     <footer
@@ -87,8 +90,8 @@ export default function NoteActions(props: {
         closeManage();
       }}
     >
-      <button
-        class="text-button"
+      <Button
+        variant="ghost"
         disabled={props.disabled}
         onClick={() => props.onReply(props.note)}
         aria-label={copy.reply.label(props.author)}
@@ -99,10 +102,11 @@ export default function NoteActions(props: {
         <Show when={props.hasDraft}>
           <span class="draft-badge">{copy.reply.draft}</span>
         </Show>
-      </button>
+      </Button>
       <Show when={props.onReact}>
-        <button
-          class="text-button reaction-button share-button"
+        <Button
+          variant="ghost"
+          class="reaction-button share-button"
           aria-pressed={shared() ? 'true' : 'false'}
           aria-busy={props.pending === 'share' ? 'true' : undefined}
           aria-label={withCount(shareLabel(), shares())}
@@ -116,9 +120,10 @@ export default function NoteActions(props: {
           <Show when={shares()}>
             <span class="count">{shares()}</span>
           </Show>
-        </button>
-        <button
-          class="text-button reaction-button like-button"
+        </Button>
+        <Button
+          variant="ghost"
+          class="reaction-button like-button"
           aria-pressed={liked() ? 'true' : 'false'}
           aria-busy={props.pending === 'like' ? 'true' : undefined}
           aria-label={withCount(likeLabel(), likes())}
@@ -128,18 +133,19 @@ export default function NoteActions(props: {
           onClick={() => props.onReact?.(props.note, 'like')}
         >
           <Icon name="heart" filled={liked()} />
-          <span class="action-label">{likeLabel()}</span>
+          <span class="action-label">{copy.reactions.like}</span>
           <Show when={likes()}>
             <span class="count">{likes()}</span>
           </Show>
-        </button>
+        </Button>
       </Show>
       <Show when={props.onSave}>{save()}</Show>
       {/* Without a count the name says what pressing it does; with one, the count is the
           name's second word ("대화 12") and the title says what it counts. */}
       <Show when={props.onThread}>
-        <button
-          class="text-button thread-button"
+        <Button
+          variant="ghost"
+          class="thread-button"
           data-thread={props.note.id}
           data-count={props.replies || undefined}
           aria-label={props.replies ? withCount(copy.thread, props.replies) : copy.threadOpen}
@@ -151,13 +157,14 @@ export default function NoteActions(props: {
           <Show when={props.replies}>
             <span class="count">{props.replies}</span>
           </Show>
-        </button>
+        </Button>
       </Show>
       {/* Managing my own note comes after the five everyone gets, so the reading actions
           keep their place and their targets at every width. */}
       <Show when={props.own && (props.onEdit || props.onDelete)}>
-        <button
-          class="text-button manage-toggle"
+        <Button
+          variant="ghost"
+          class="manage-toggle"
           type="button"
           aria-label={copy.own.manageLabel}
           aria-expanded={manageOpen() ? 'true' : 'false'}
@@ -167,7 +174,7 @@ export default function NoteActions(props: {
         >
           <Icon name="more" />
           <span class="action-label">{copy.own.manage}</span>
-        </button>
+        </Button>
       </Show>
       <div
         class="manage-group note-manage-row"
@@ -177,8 +184,9 @@ export default function NoteActions(props: {
           {save(true)}
         </Show>
         <Show when={props.own && props.onEdit}>
-          <button
-            class="text-button edit-button"
+          <Button
+            variant="ghost"
+            class="edit-button"
             type="button"
             disabled={props.disabled}
             aria-label={copy.own.editLabel}
@@ -187,13 +195,14 @@ export default function NoteActions(props: {
           >
             <Icon name="pencil" />
             <span class="action-label">{copy.own.edit}</span>
-          </button>
+          </Button>
         </Show>
         {/* Destructive, so it opens a confirmation instead of acting, and it is never bound to
           a key: `aria-expanded` ties it to the confirmation the card shows below. */}
         <Show when={props.own && props.onDelete}>
-          <button
-            class="text-button delete-button"
+          <Button
+            variant="ghost"
+            class="delete-button"
             type="button"
             disabled={props.disabled}
             aria-label={copy.own.deleteLabel}
@@ -204,7 +213,7 @@ export default function NoteActions(props: {
           >
             <Icon name="trash" />
             <span class="action-label">{copy.own.delete}</span>
-          </button>
+          </Button>
         </Show>
       </div>
     </footer>
