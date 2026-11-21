@@ -54,7 +54,7 @@ Do not expose `.local/c2s-credentials.json` or request bodies in logs/review out
 ## Implementation rules
 
 - Solid **2** uses `@solidjs/web` for JSX and DOM, lowercase HTML attributes,
-  split effects, and microtask-batched signals. Keep matching RC packages pinned.
+  split effects, and microtask-batched signals. Keep the Solid runtime packages pinned to matching versions.
   Do not import `solid-js/web`, `onMount`, or Solid 1 router/start dependencies.
 - Keep activity evaluation pure, deterministic and independently tested. Server
   delivery is the trust boundary; never imply browser signature verification.

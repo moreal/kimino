@@ -65,6 +65,7 @@ To be released.
     focus after removing images, and keep floating controls clear while writing
     on phones. Failed connections retain the entered address, token and options
     in memory for correction; successful connection clears the form.
+ -  Upgrade the app and component gallery to the stable Solid 2 runtime.
  -  With explicit ONI mode, attach up to four PNG, JPEG, or WebP images of
     up to 5 MiB each, with local previews and alternative text. Images are
     uploaded only when posting, and drafts stay in memory.

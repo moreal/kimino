@@ -1,6 +1,6 @@
 import { discoveryCopy } from '../presentation/account-discovery';
 import { readingCopy } from '../presentation/copy-reading';
-import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js';
 import type { TimelineNote } from '../domain/social';
 import type { FeedState, FeedViewModel } from '../presentation/feed-view-model';
 import {
@@ -48,12 +48,17 @@ export default function FeedList(props: {
    * first), so Tab reaches the list in a couple of stops and j/k move a visible ring between
    * cards without adding every card to the tab sequence.
    */
-  const [cursor, setCursor] = createSignal<string | undefined>(undefined);
-  // The remembered card left the list (filter, list switch, delete): fall back to the first.
+  const [rememberedCursor, setCursor] = createSignal<string | undefined>(undefined);
+  const visibleCursor = (notes: readonly TimelineNote[], id: string | undefined) =>
+    id && notes.some((note) => note.id === id) ? id : undefined;
+  // Fall back in the same render when the remembered card leaves the list.
+  const cursor = createMemo(() => visibleCursor(props.state.visibleNotes, rememberedCursor()));
+  // Forget the old card so it does not become the tab stop again if it reappears.
   createEffect(
-    () => !!cursor() && !props.state.visibleNotes.some((note) => note.id === cursor()),
-    (stale) => {
-      if (stale) setCursor(undefined);
+    () => props.state.visibleNotes,
+    (notes) => {
+      const id = untrack(rememberedCursor);
+      if (id && !visibleCursor(notes, id)) setCursor(undefined);
     },
   );
   const tabindexFor = (note: TimelineNote, index: number) =>

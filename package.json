@@ -32,14 +32,14 @@
   },
   "dependencies": {
     "@logtape/logtape": "^2.1.0",
-    "@solidjs/web": "2.0.0-rc.6",
+    "@solidjs/web": "2.0.3",
     "dompurify": "^3.3.0",
-    "solid-js": "2.0.0-rc.6"
+    "solid-js": "2.0.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0",
     "@sacho/sacho": "^0.1.0",
-    "@solidjs/vite-plugin": "3.0.0-next.39",
+    "@solidjs/vite-plugin": "3.0.1",
     "@types/node": "^24.0.0",
     "prettier": "3.8.3",
     "typescript": "^5.9.0",

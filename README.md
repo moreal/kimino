@@ -125,11 +125,10 @@ npm run c2s:follow:down        # 데이터는 보존하고 실험 환경만 종�
 이 테스트는 토큰을 메모리에서만 사용하며 trace·스크린샷·비디오를 남기지 않습니다.
 소스 출처, 서버 보완 범위와 빌드 조건은 [실험 환경 문서](dev/oni-follow/README.md)에 있습니다.
 
-기존 코드는 React가 아닌 Solid 1/SolidStart 초기 템플릿이었습니다. 브라우저
-중심 구조로 정리하면서 Solid `2.0.0-rc.6`, `@solidjs/web` 동버전, Vite 8을
-사용합니다. RC API 변경에 대비해 Solid와 빌드 플러그인을 고정했습니다.
+앱은 정식 Solid `2.0.3`, 같은 버전의 `@solidjs/web`, Vite 8을 사용합니다.
+Solid 런타임과 빌드 플러그인 버전은 고정합니다.
 
-의존성 선택: [Solid 2 migration](https://github.com/solidjs/solid/blob/next/documentation/solid-2.0/MIGRATION.md),
+의존성 선택: [Solid 2 migration](https://github.com/solidjs/solid/blob/solid-js%402.0.3/documentation/solid-2.0/MIGRATION.md),
 [ActivityPub C2S](https://www.w3.org/TR/activitypub/#client-to-server-interactions),
 ActivityPub 라이브러리를 확장할 때는 [Fedify](https://fedify.dev/)를 우선 검토합니다.
 현재 제한된 C2S JSON 처리에는 별도 ActivityPub 런타임을 추가하지 않았습니다.

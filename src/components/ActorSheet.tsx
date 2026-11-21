@@ -91,7 +91,11 @@ export default function ActorSheet(props: {
             </dl>
             {props.relationship}
             <Show when={props.onPeople}>
-              <button type="button" class="text-button actor-people-link" onClick={props.onPeople}>
+              <button
+                type="button"
+                class="text-button actor-people-link"
+                onClick={() => props.onPeople?.()}
+              >
                 {relationshipCopy.open}
               </button>
             </Show>
@@ -108,7 +112,7 @@ export default function ActorSheet(props: {
                 <button
                   type="button"
                   class="secondary-button actor-sheet-disconnect"
-                  onClick={props.onDisconnect}
+                  onClick={() => props.onDisconnect?.()}
                 >
                   <Icon name="log-out" class="icon--sm" />
                   {props.disconnectLabel}
